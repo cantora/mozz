@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+import argparse
+import sys
+
+def opt_parser():
+
+	parser = argparse.ArgumentParser(description='fuzz fuzz fuzz.')
+	parser.add_argument('session', nargs='?', help='session file', default=None)
+	parser.add_argument('-v', '--verbose', action='store_true', help='print debug output.')
+	parser.add_argument(
+		'-d',
+		'--debugger',
+		help=('specify the debugger to use for fuzzing. default: gdb'),
+		default='gdb'
+	)
+
+	return parser
+
+
+class MissingOption(Exception):
+	pass
+
+def run(options):
+	if options.debugger == "gdb":
+		from mozz.adapter import gdb_run
+		cli_run = gdb_run
+	else:
+		raise ValueError("unknown debugger %s" % options.debugger)
+
+	cli_run(options)
+
+if __name__ == "__main__":
+	opt_p = opt_parser()
+
+	my_args = []
+	host_args = []
+	for i in range(1, len(sys.argv)):
+		arg = sys.argv[i]
+		if arg.strip() == "--":
+			host_args = sys.argv[(i+1):]
+			break
+
+		my_args.append(arg)
+
+	options = opt_p.parse_args(my_args)
+	options.host_args = host_args
+
+	try:
+		run(options)
+	except (MissingOption, ValueError) as e:
+		print e
+		print
+		opt_p.print_help()
+		exit(-1)
+

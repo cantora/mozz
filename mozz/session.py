@@ -98,6 +98,13 @@ class Session(object):
 		(addr, end) = convert_ints_to_addrs(addr, end)
 		self.skip_map[addr] = end
 
+	def to_run(self):
+		'''
+		invoke this callback when the host is ready to
+		run the session.
+		'''
+		return self.add_event_cb_fn("run")
+
 	def notify_event(self, name, *args):
 		if not name in self.event_cbs \
 				or not callable(self.event_cbs[name]):
@@ -123,6 +130,8 @@ class Session(object):
 
 		return v(self, k, *args)
 
-	def run(self, host):
-		raise Exception("Asdf")
+	def notify_event_run(self, host):
+		return notify_event("run", host)
+
+			
 
