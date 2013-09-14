@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 
 void vuln(char *str, FILE *fd) {
 	char buf[32];
@@ -19,8 +20,12 @@ int main(int argc, char *argv[]) {
 	int i;
 	FILE *fd;
 
-	printf("example.c\n");
+	printf("example.c: enter\n");
 	printf("\targc = %d\n", argc);
+
+	/*pause();*/
+	raise(SIGABRT);
+
 	for(i = 0; i < argc; i++) {
 		if(i == 2 && argv[2][0] == 'b')
 			exit(2345);
@@ -33,6 +38,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	printf("example.c: exit\n");
 	return 0;
 }
 

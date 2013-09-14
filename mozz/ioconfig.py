@@ -3,8 +3,12 @@ import os, tempfile
 class IOConfig(object):
 	MODES = ('r', 'w')				
 
+	@property
+	def modes(self):
+		return self.__class__.MODES
+
 	def __init__(self, mode):
-		if not mode in MODES:
+		if not mode in self.modes:
 			raise ValueError("invalid mode %r" % mode)
 		self._mode = mode
 	
@@ -28,7 +32,11 @@ class DefaultIOConfig(IOConfig):
 	non-specified configuration. basically defers
 	to what the host does by default
 	'''
-	pass
+	def filename(self):
+		return None
+
+	def io_object(self):
+		return None
 
 class FifoConfig(IOConfig):
 

@@ -52,6 +52,11 @@ class Session(object):
 		self.mockups = {}
 		self.skip_map = {}
 		self.n = 0
+		self.target = None
+		self.flags = {}
+
+	def set_target(self, filename):
+		self.target = filename
 
 	def iteration(self):
 		return self.n
@@ -110,7 +115,7 @@ class Session(object):
 				or not callable(self.event_cbs[name]):
 			return
 
-		self.event_cbs[name](self, *args)
+		self.event_cbs[name](*args)
 
 	def notify_entry(self):
 		return self.notify_event("entry")
@@ -128,10 +133,25 @@ class Session(object):
 		if None in (k, v) or not callable(v):
 			return
 
-		return v(self, k, *args)
+		return v(self, *args)
 
 	def notify_event_run(self, host):
-		return notify_event("run", host)
+		return self.notify_event("run", host)
 
-			
+	def set_flag(self, name):
+		self.flags[name] = True
+	
+	def set_stop_flag(self):
+		'''
+		signals that the current inferior should be
+		aborted and cleaned up. use this flag in a callback
+		to cause host.run_inferior() to return.
+		'''
+		return self.set_flag("stop")
 
+	def get_flag(self, name):
+		if name in self.flags \
+				and self.flags[name] == True:
+			return True
+
+		return False
