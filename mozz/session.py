@@ -1,3 +1,4 @@
+import os
 from collections import namedtuple
 
 import mozz.err
@@ -48,7 +49,9 @@ class Session(object):
 
 	def __init__(self, name):
 		self.name = name
-		self.event_cbs = {}
+		self.event_cbs = {
+			"run":		self.__class__.default_run
+		}
 		self.addr_cbs = {}
 		self.mockups = {}
 		self.skip_map = {}
@@ -56,8 +59,18 @@ class Session(object):
 		self.target = None
 		self.flags = {}
 
+	@staticmethod
+	def default_run(host):
+		host.run_inferior()
+
 	def set_target(self, filename):
 		self.target = filename
+
+	def set_target_rel(self, sess_file, rel_filename):
+		self.target = os.path.join(
+			os.path.dirname(os.path.abspath(sess_file)),
+			rel_filename
+		)
 
 	def iteration(self):
 		return self.n

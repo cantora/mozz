@@ -1,11 +1,8 @@
 import gdb
 import os
-import re
-import sys
 
 import mozz.host
-
-host = None
+import mozz.adapter
 
 class GDBInf(mozz.host.Inf):
 
@@ -76,7 +73,10 @@ class GDBHost(mozz.host.Host):
 		self.on_exit()
 		
 	def _run_inferior(self, *args, **kwargs):
-		gdb.execute("file %s" % self.session.target)
+		try:
+			gdb.execute("file %s" % self.session.target)
+		except gdb.error as e:
+			raise mozz.host.HostErr("session target error: %s" % e)
 
 		self.set_inferior(GDBInf(gdb.selected_inferior().num, **kwargs))
 		cmd = "run "
@@ -108,66 +108,68 @@ class Cmd(gdb.Command):
 		self.name = "mozz-"+name
 		super (Cmd, self).__init__(self.name, type)
 
-
-def run_session(fpath):
-	global host
-	if not host is None:
-		raise Exception("host already exists")
-
-	sess_module = __import__(re.sub(r'\.py$', '', fpath))
-	sess = sess_module.main()
-
-	host = GDBHost(sess)
-	sess.notify_event_run(host)
-
-
-def init_cmds():
-	class Run(Cmd):
-		"""run session. pass the filepath of the session to run"""
-
-		def __init__(self):
-			super(Run, self).__init__("run", gdb.COMMAND_RUNNING)
-
-		def usage(self):
-			print("usage: %s FILEPATH" % (self.name))
-			
-		def invoke(self, arg, from_tty):
-			self.dont_repeat()
-			if not os.path.isfile(arg):
-				print("invalid session %r" % arg)
-				self.usage()
-				return
-			else:				
-				return run_session(arg)
-
-	Run()
-
-def on_stop(event):
-	if host is not None:
-		host.gdb_stop(event)
-
-def on_cont(event):
-	if host is not None:
-		host.gdb_cont(event)
-
-def on_exit(event):
-	if host is not None:
-		host.gdb_exit(event)
-
-def run(options):
-	gdb.execute("set python print-stack full")
-	gdb.execute("set pagination off")
+class Adapter(mozz.adapter.Adapter):
 	
-	init_cmds()
+	def __init__(self):
+		self.host = None
+
+		gdb.execute("set python print-stack full")
+		gdb.execute("set pagination off")
+		
+		self.init_cmds()
+		
+		gdb.events.stop.connect(self.on_stop)
+		gdb.events.cont.connect(self.on_cont)
+		#gdb.events.new_objfile.connect(self.on_objfile)
+		gdb.events.exited.connect(self.on_exit)
+
+	def run_session(self, sess):
+		if not self.host is None:
+			raise Exception("host already exists")
 	
-	gdb.events.stop.connect(on_stop)
-	gdb.events.cont.connect(on_cont)
-	#gdb.events.new_objfile.connect(on_objfile)
-	gdb.events.exited.connect(on_exit)
-
-	#CREATE host object
-	if options.session:
-		#gdb.post_event(lambda : gdb.execute("mozz-run %s" % options.session))
-		gdb.execute("mozz-run %s" % options.session)
-
-
+		self.host = GDBHost(sess)
+		sess.notify_event_run(self.host)
+	
+	def init_cmds(self):
+		ad = self
+		class Run(Cmd):
+			"""run session. pass the filepath of the session to run"""
+	
+			def __init__(self):
+				super(Run, self).__init__("run", gdb.COMMAND_RUNNING)
+	
+			def usage(self):
+				print("usage: %s FILEPATH" % (self.name))
+				
+			def invoke(self, arg, from_tty):
+				self.dont_repeat()
+				if not os.path.isfile(arg):
+					print("invalid session %r" % arg)
+					self.usage()
+				else:
+					try:
+						ad.import_session_file(arg)
+					except mozz.host.HostErr as e:
+						print(str(e))
+	
+		Run()
+	
+	def on_stop(self, event):
+		if self.host is not None:
+			self.host.gdb_stop(event)
+	
+	def on_cont(self, event):
+		if self.host is not None:
+			self.host.gdb_cont(event)
+	
+	def on_exit(self, event):
+		if self.host is not None:
+			self.host.gdb_exit(event)
+	
+	def run(self, options):
+		if options.session:
+			#gdb.post_event(lambda : gdb.execute("mozz-run %s" % options.session))
+			gdb.execute("mozz-run %s" % options.session)
+			if options.exit:
+				gdb.execute("quit")
+	

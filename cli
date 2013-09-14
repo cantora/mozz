@@ -10,8 +10,14 @@ def opt_parser():
 	parser.add_argument(
 		'-d',
 		'--debugger',
-		help=('specify the debugger to use for fuzzing. default: gdb'),
+		help='specify the debugger to use for fuzzing. default: gdb',
 		default='gdb'
+	)
+	parser.add_argument(
+		'--exit',
+		action='store_true',
+		help='exit after running session ' + \
+				'(ignored if no session provided).'
 	)
 
 	return parser

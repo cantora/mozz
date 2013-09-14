@@ -72,8 +72,8 @@ class Host(object):
 		else:
 			raise TypeError("unexpected callback key %r" % key)
 
-		if key[0:3] != "SIG" and not result:
-			print("callback %r not handled" % key)
+		#if key[0:3] != "SIG" and not result:
+		#	print("callback %r not handled" % key)
 
 		return result
 
