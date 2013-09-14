@@ -1,6 +1,7 @@
 from collections import namedtuple
 
 import mozz.err
+from mozz.cb import *
 
 class SessionErr(mozz.err.Err):
 	pass
@@ -110,15 +111,28 @@ class Session(object):
 		'''
 		return self.add_event_cb_fn("run")
 
-	def notify_event(self, name, *args):
+	def on_signal_default(self):
+		return self.add_event_cb_fn(SIGNAL_DEFAULT)
+
+	def on_signal(self, sig):
+		return self.add_event_cb_fn(sig)
+
+	def on_signal_unknown(self):
+		return self.add_event_cb_fn(SIGNAL_UNKNOWN)
+
+	def on_start(self):
+		return self.add_event_cb_fn(START)
+
+	def on_exit(self):
+		return self.add_event_cb_fn(EXIT)
+
+	def notify_event(self, name, *args, **kwargs):
 		if not name in self.event_cbs \
 				or not callable(self.event_cbs[name]):
-			return
+			return False
 
-		self.event_cbs[name](*args)
-
-	def notify_entry(self):
-		return self.notify_event("entry")
+		self.event_cbs[name](*args, **kwargs)
+		return True
 
 	def find_addr(self, d, addr):
 		i = int(addr)
@@ -128,20 +142,24 @@ class Session(object):
 
 		return (None, None)
 
-	def notify_addr(self, addr, *args):
+	def notify_addr(self, addr, *args, **kwargs):
 		(k, v) = self.find_addr(self.addr_cbs, addr)
 		if None in (k, v) or not callable(v):
-			return
+			return False
 
-		return v(self, *args)
+		v(self, *args, **kwargs)
+		return True
 
 	def notify_event_run(self, host):
 		return self.notify_event("run", host)
 
+	def clear_flags(self):
+		self.flags = {}
+
 	def set_flag(self, name):
 		self.flags[name] = True
 	
-	def set_stop_flag(self):
+	def set_flag_stop(self):
 		'''
 		signals that the current inferior should be
 		aborted and cleaned up. use this flag in a callback
@@ -155,3 +173,6 @@ class Session(object):
 			return True
 
 		return False
+
+	def get_flag_stop(self):
+		return self.get_flag("stop")

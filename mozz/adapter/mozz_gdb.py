@@ -13,6 +13,9 @@ class GDBInf(mozz.host.Inf):
 		super(GDBInf, self).__init__(**kwargs)
 		self.inf_id = inf_id
 
+	def kill(self):
+		gdb.execute("kill inferiors %d" % self.inf_id)
+
 	def state(self):
 		inf = self.gdb_inf()
 		result = 'dead'
@@ -31,7 +34,6 @@ class GDBInf(mozz.host.Inf):
 
 	def dump(self):
 		inf = self.gdb_inf()
-		print("inferior: %r" % inf)
 		print("inferior attrs: num=%r, pid=%r, is_valid=%r" % (
 			inf.num, inf.pid, inf.is_valid()
 		))
@@ -49,39 +51,31 @@ class GDBHost(mozz.host.Host):
 		return gdb.selected_inferior().num == self.inferior().inf_id
 
 	def ignore_callback(self):
-		return (not self.has_inferior()) \
+		return super(GDBHost, self).ignore_callback() \
 			or (not self.selected_is_my_inf())
 
-	def on_stop(self, event):
-		print("stop event: signal=%r" % event.stop_signal)
-
-		if self.ignore_callback():
-			return
+	def gdb_stop(self, event):
+		#print("gdb stop event: signal=%r" % event.stop_signal)
 
 		if isinstance(event, gdb.SignalEvent):
 			#gdb seems to use the same names as python std lib for signals
-			self.inferior().on_stop(event.stop_signal)
+			self.on_stop(event.stop_signal)
+
 		elif isinstance(event, gdb.BreakpointEvent):
-			self.inferior().on_break()
+			self.on_break()
 
 
-	def on_cont(self, event):
-		print("cont event: %r" % event)
+	def gdb_cont(self, event):
+		#print("cont event: %r" % event)
 
-		if self.ignore_callback():
-			return
+		self.on_start()
 
-		self.inferior().on_start()
-		self.inferior().dump()
+	def gdb_exit(self, event):
+		#print("exit event: %r" % event)
 
-	def on_exit(self, event):
-		print("exit event: %r" % event)
-		if self.ignore_callback():
-			return
-
-		self.inferior().on_exit()
+		self.on_exit()
 		
-	def run_inferior(self, *args, **kwargs):
+	def _run_inferior(self, *args, **kwargs):
 		gdb.execute("file %s" % self.session.target)
 
 		self.set_inferior(GDBInf(gdb.selected_inferior().num, **kwargs))
@@ -106,7 +100,7 @@ class GDBHost(mozz.host.Host):
 			gdb.execute("cont")
 
 		self.clear_inferior()
-		
+
 
 class Cmd(gdb.Command):
 	
@@ -150,15 +144,15 @@ def init_cmds():
 
 def on_stop(event):
 	if host is not None:
-		host.on_stop(event)
+		host.gdb_stop(event)
 
 def on_cont(event):
 	if host is not None:
-		host.on_cont(event)
+		host.gdb_cont(event)
 
 def on_exit(event):
 	if host is not None:
-		host.on_exit(event)
+		host.gdb_exit(event)
 
 def run(options):
 	gdb.execute("set python print-stack full")

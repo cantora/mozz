@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import mozz
+import mozz.sig
 
 def main():
 	s = mozz.Session("test1")
@@ -27,9 +28,27 @@ def main():
 		host.log("do fake read")
 		raise Exception("Asdfa")
 
+	@s.on_signal_default()
+	def default_sig(host, sig):
+		host.log("got signal: %r" % sig)
+
+	@s.on_signal(mozz.sig.SIGFPE)
+	def on_fpe(host):
+		host.log("got fpe. set stop flag")
+		host.session.set_flag_stop()
+
+	@s.on_start()
+	def on_start(host):
+		host.log("start inferior")
+
+	@s.on_exit()
+	def on_exit(host):
+		host.log("inferior exited")
+
 	@s.to_run()
 	def run(host):
 		for i in range(0, 4):
+			host.log("===========================================")
 			host.log("run inferior %d" % i)
 			host.run_inferior()
 

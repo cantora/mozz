@@ -20,6 +20,9 @@ class Host(object):
 
 		return True
 
+	def ignore_callback(self):
+		return (not self.has_inferior())
+
 	def set_inferior(self, inf):
 		if not isinstance(inf, Inf):
 			raise TypeError("expected instance of Inf: %r" % inf)
@@ -38,7 +41,7 @@ class Host(object):
 	def should_continue(self):
 		return self.has_inferior() \
 			and (not self.inferior().state() == "dead") \
-			and (not self.session.get_flag("stop"))			
+			and (not self.session.get_flag_stop())
 
 	def run_inferior(self, *args, **kwargs):
 		'''
@@ -49,7 +52,66 @@ class Host(object):
 			'stdout':	IOConfig instance
 			'stderr':	IOConfig instance
 		'''
+		self.session.clear_flags()
+
+		return self._run_inferior(*args, **kwargs)
+
+	def _run_inferior(self, *args, **kwargs):
+		'''
+		internal method for subclasses to override
+		'''
 		raise NotImplementedError("not implemented")
+
+	def invoke_callback(self, key, *args, **kwargs):
+		args = (self,) + args
+
+		if isinstance(key, mozz.session.Addr):
+			result = self.session.notify_addr(key, *args, **kwargs)
+		elif isinstance(key, str):
+			result = self.session.notify_event(key, *args, **kwargs)
+		else:
+			raise TypeError("unexpected callback key %r" % key)
+
+		if key[0:3] != "SIG" and not result:
+			print("callback %r not handled" % key)
+
+		return result
+
+	def on_break(self):
+		if self.ignore_callback():
+			return
+		
+		self.inferior().on_break()
+		self.invoke_callback(self.inferior().pc_addr())
+
+	def on_stop(self, signal):
+		if self.ignore_callback():
+			return
+
+		self.inferior().on_stop(signal)
+
+		if not signal in mozz.sig.signals():
+			signal = mozz.cb.SIGNAL_UNKNOWN
+
+		result = self.invoke_callback(signal)
+		if not result:
+			result = self.invoke_callback(mozz.cb.SIGNAL_DEFAULT, signal)
+
+		return result
+											
+	def on_start(self):
+		if self.ignore_callback():
+			return
+
+		self.inferior().on_start()
+		self.invoke_callback(mozz.cb.START)
+
+	def on_exit(self):
+		if self.ignore_callback():
+			return
+
+		self.inferior().on_exit()
+		self.invoke_callback(mozz.cb.EXIT)
 
 class InfErr(mozz.err.Err):
 	pass
@@ -73,8 +135,7 @@ class Inf(object):
 		return self.__class__.IO_NAMES
 
 	def __init__(self, **kwargs):
-		self._running = False	
-		self._callbacks = {}
+		self._running = False
 
 		for (name, mode) in self.io_names.items():
 			int_name = "_"+name
@@ -87,12 +148,14 @@ class Inf(object):
 				setattr(self, int_name, DefaultIOConfig(mode))
 
 	def cleanup(self):
+		if self.state() != "dead":
+			self.kill()
+
 		for name in self.io_names.keys():
 			getattr(self, name)().cleanup()
 
-	@property
-	def callbacks(self):
-		return self._callbacks
+	def kill(self):
+		raise NotImplementedError("not implemented")
 
 	def running(self):
 		return self._running
@@ -103,34 +166,17 @@ class Inf(object):
 		'''
 		raise NotImplementedError("not implemented")
 
-	def invoke_callback(self, key):
-		if not key in self._callbacks \
-				or not callable(self._callbacks[key]):
-			return False
-
-		self._callbacks[key]()
-		return True
-
 	def on_break(self):
 		self._running = False
-		self.invoke_callback(self.pc_addr())
 
 	def on_stop(self, signal):
 		self._running = False
-
-		if not signal in mozz.sig.signals():
-			signal = 'signal_unknown'
-
-		if not self.invoke_callback(signal):
-			self.invoke_callback('signal_default')
 											
 	def on_start(self):
 		self._running = True
-		self.invoke_callback("start")
 
 	def on_exit(self):
 		self._running = False
-		self.invoke_callback("exit")
 
 	def stdin(self):
 		return self._stdin
