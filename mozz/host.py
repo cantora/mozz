@@ -10,6 +10,7 @@ class Host(object):
 	def __init__(self, session):
 		self.session = session
 		self.inf = None
+		self._drop_into_cli = False
 
 	def log(self, s):
 		raise NotImplementedException("not implemented")
@@ -54,6 +55,7 @@ class Host(object):
 			'stderr':	IOConfig instance
 		'''
 		self.session.clear_flags()
+		self.set_breakpoints()
 
 		return self._run_inferior(*args, **kwargs)
 
@@ -66,8 +68,9 @@ class Host(object):
 	def invoke_callback(self, key, *args, **kwargs):
 		args = (self,) + args
 
-		if isinstance(key, mozz.session.Addr):
-			result = self.session.notify_addr(key, *args, **kwargs)
+		if isinstance(key, (int, long)):
+			addr = mozz.session.addr_from_int(key)
+			result = self.session.notify_addr(addr, *args, **kwargs)
 		elif isinstance(key, str):
 			result = self.session.notify_event(key, *args, **kwargs)
 		else:
@@ -78,16 +81,42 @@ class Host(object):
 
 		return result
 
+	def set_breakpoints(self):
+		for addr in self.session.each_break_addr():
+			self.set_breakpoint(addr)
+
+	def set_breakpoint(self, addr):
+		raise NotImplementedError("not implemented")
+
+	def set_drop_into_cli(self):
+		self._drop_into_cli = True
+
+	def clear_drop_into_cli(self):
+		'''
+		whenever the host implementation is sure that it can
+		actually drop into the command interface, it should
+		call this to clear the flag just before doing so.
+		'''
+		self._drop_into_cli = False
+
+	def drop_into_cli(self):
+		'''
+		flag which specifies that the session has requested that
+		control be given to the host/user until the user decides
+		to continue again.
+		'''
+		return (self._drop_into_cli == True)
+
 	def on_break(self):
 		if self.ignore_callback():
-			return
+			return False
 		
 		self.inferior().on_break()
-		self.invoke_callback(self.inferior().pc_addr())
+		return self.invoke_callback(self.inferior().reg_pc())
 
 	def on_stop(self, signal):
 		if self.ignore_callback():
-			return
+			return False
 
 		self.inferior().on_stop(signal)
 
@@ -102,17 +131,17 @@ class Host(object):
 											
 	def on_start(self):
 		if self.ignore_callback():
-			return
+			return False
 
 		self.inferior().on_start()
-		self.invoke_callback(mozz.cb.START)
+		return self.invoke_callback(mozz.cb.START)
 
 	def on_exit(self):
 		if self.ignore_callback():
-			return
+			return False
 
 		self.inferior().on_exit()
-		self.invoke_callback(mozz.cb.EXIT)
+		return self.invoke_callback(mozz.cb.EXIT)
 
 class InfErr(mozz.err.Err):
 	pass
@@ -188,7 +217,7 @@ class Inf(object):
 	def stderr(self):
 		return self._stderr
 
-	def pc_addr(self):
+	def reg_pc(self):
 		raise NotImplementedError("not implemented")
 
 	def mem_write(self, addr, bytes):

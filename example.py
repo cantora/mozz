@@ -15,6 +15,7 @@ def at_entry(host):
 def at_main(host):
 	host.log("at main %d" % host.session.iteration())
 
+'''
 @s.mockup(0x40077b, 0x4007a5)
 def fake_fp(host):
 	host.log("make fake fp")
@@ -26,6 +27,7 @@ s.skip(0x4007bf, 0x4007cb)
 def fake_read(host):
 	host.log("do fake read")
 	raise Exception("Asdfa")
+'''
 
 @s.on_signal_default()
 def default_sig(host, sig):
@@ -43,13 +45,5 @@ def on_start(host):
 @s.on_exit()
 def on_exit(host):
 	host.log("inferior exited")
-
-@s.to_run()
-def run(host):
-	for i in range(0, 4):
-		host.log("===========================================")
-		host.log("run inferior %d" % i)
-		host.run_inferior()
-
 
 mozz.run_session(s)

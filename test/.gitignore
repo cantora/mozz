@@ -1,4 +1,4 @@
 *.bin
 *.log
 *.out
-
+!addr_basic_test.bin

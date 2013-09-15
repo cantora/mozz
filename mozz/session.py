@@ -29,7 +29,10 @@ class Addr(namedtuple('AddrBase', 'addr base')):
 		havent implemented self.base functionality yet,
 		so only absolute addresses are supported now
 		'''
-		return addr
+		return self.addr
+
+def addr_from_int(n):
+	return Addr(n, None)
 
 def convert_ints_to_addrs(*args):
 	result = []
@@ -180,7 +183,7 @@ class Session(object):
 		if None in (k, v) or not callable(v):
 			return False
 
-		v(self, *args, **kwargs)
+		v(*args, **kwargs)
 		return True
 
 	def notify_event_run(self, host):
@@ -209,3 +212,13 @@ class Session(object):
 
 	def get_flag_stop(self):
 		return self.get_flag("stop")
+
+	def each_break_addr(self):
+		for addr in self.addr_cbs.keys():
+			yield int(addr)
+
+		for addr in self.mockups.keys():
+			yield int(addr)
+
+		for addr in self.skip_map.keys():
+			yield int(addr)

@@ -4,6 +4,21 @@ import os
 import mozz.host
 import mozz.adapter
 
+class BrkPoint(gdb.Breakpoint):
+
+	def __init__(self, host, *args, **kwargs):
+		super(BrkPoint, self).__init__(*args, **kwargs)
+		self.host = host
+
+	def stop(self):
+		self.host.on_break()
+		if self.host.drop_into_cli():
+			self.host.clear_drop_into_cli()
+			return True
+
+		return False
+
+	
 class GDBInf(mozz.host.Inf):
 
 	def __init__(self, inf_id, **kwargs):
@@ -34,6 +49,28 @@ class GDBInf(mozz.host.Inf):
 		print("inferior attrs: num=%r, pid=%r, is_valid=%r" % (
 			inf.num, inf.pid, inf.is_valid()
 		))
+
+	def reg_pc(self):
+		frame = self.get_frame()
+		pc = frame.pc()
+
+		return pc
+
+	def get_frame(self):
+		try:
+			frame = gdb.selected_frame()
+		except gdb.error:
+			raise NoFrame("no frame is selected")
+
+		self.assert_frame(frame)
+
+		return frame
+
+	def assert_frame(self, frame):
+		if not frame.is_valid():
+			raise Exception("expected valid frame")
+		#if frame.type() != gdb.NORMAL_FRAME:
+		#	raise Exception("expected frame.type == NORMAL_FRAME. got: %s" % frame.type())
 
 
 class GDBHost(mozz.host.Host):
@@ -71,7 +108,10 @@ class GDBHost(mozz.host.Host):
 		#print("exit event: %r" % event)
 
 		self.on_exit()
-		
+
+	def set_breakpoint(self, addr):
+		BrkPoint(self, spec=("*0x%x" % addr), type=gdb.BP_BREAKPOINT, internal=True)
+
 	def _run_inferior(self, *args, **kwargs):
 		try:
 			gdb.execute("file %s" % self.session.target)
