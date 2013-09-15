@@ -13,11 +13,12 @@ test/%_test.bin: test/%_test.c
 define test-template
 .PHONY: $(1)
 $(1): test/$(1).bin
-	@echo '========================================================'
-	@echo '== test $(1) =='
+	@echo '######################################################################'; done
+	@echo '############# TEST $(1) '
+	@echo '######################################################################'; done
 	@./cli --exit test/$(1).py > test/$(1).log 2>&1
 	@cat test/$(1).out 2>/dev/null || { echo 'test $(1) failed to produce output'; false; }
-	@echo '========================================================'
+	@echo
 
 endef
 
