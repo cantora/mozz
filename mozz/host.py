@@ -33,6 +33,7 @@ class Host(object):
 		if self.inf:
 			self.inf.cleanup()
 
+		self.invoke_callback(mozz.cb.INFERIOR_POST)
 		self.inf = None
 
 	def inferior(self):

@@ -11,22 +11,30 @@ class Test(unittest.TestCase):
 		
 		s.set_target_rel(__file__, "run_exit_test.bin")
 
-		d = {
-			'got_exit': False,
-			'got_run': False
-		}
-	
-		@s.on_exit()
-		def on_exit(host):
-			d['got_exit'] = True
+		state = [0]
 
 		@s.to_run()
 		def run(host):
-			d['got_run'] = True
+			self.assertEqual(state[0], 0)
+			state[0] += 1
 			host.run_inferior()
 
+		@s.on_inferior_pre()
+		def inf_pre(host):
+			self.assertEqual(state[0], 1)
+			state[0] += 1
+
+		@s.on_exit()
+		def on_exit(host):
+			self.assertEqual(state[0], 2)
+			state[0] += 1
+
+		@s.on_inferior_post()
+		def on_inf_post(host):
+			self.assertEqual(state[0], 3)
+			state[0] += 1
+
 		mozz.run_session(s)
-		self.assertEqual(d['got_exit'], True)
-		self.assertEqual(d['got_run'], True)
+		self.assertEqual(state[0], 4)
 
 mozz.test.run_test_module(__name__, __file__)

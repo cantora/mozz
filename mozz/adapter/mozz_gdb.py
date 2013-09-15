@@ -93,6 +93,7 @@ class GDBHost(mozz.host.Host):
 		if self.inferior().stderr().filename():
 			cmd += "2> %s " % (self.inferior().stderr().filename())
 
+		self.invoke_callback(mozz.cb.INFERIOR_PRE)
 		#runs the inferior until the first stop
 		gdb.execute(cmd)
 		

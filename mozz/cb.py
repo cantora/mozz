@@ -5,3 +5,8 @@ SIGNAL_UNKNOWN = "signal_unknown"
 
 START = "start"
 EXIT = "exit"
+
+#just after the inferior object is created
+INFERIOR_PRE = "inferior_pre" 
+#just before the inferior object is destroyed (after cleanup)
+INFERIOR_POST = "inferior_post"

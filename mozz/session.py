@@ -88,6 +88,20 @@ class Session(object):
 	def add_addr_cb_fn(self, addr):
 		return self.add_cb_fn(self.addr_cbs, addr)
 
+	def on_inferior_pre(self):
+		'''
+		called just after inferior object is created
+		and before it is run
+		'''
+		return self.add_event_cb_fn(mozz.cb.INFERIOR_PRE)
+
+	def on_inferior_post(self):
+		'''
+		called just after inferior finishes and just
+		before it the inferior object is destroyed
+		'''
+		return self.add_event_cb_fn(mozz.cb.INFERIOR_POST)
+
 	def at_entry(self):
 		'''
 		invoke the decorated function at the execution of
@@ -139,7 +153,13 @@ class Session(object):
 	def on_exit(self):
 		return self.add_event_cb_fn(EXIT)
 
+	def process_event(self, name, *args, **kwargs):
+		if name == mozz.cb.INFERIOR_PRE:
+			self.n += 1
+		
 	def notify_event(self, name, *args, **kwargs):
+		self.process_event(name, *args, **kwargs)
+
 		if not name in self.event_cbs \
 				or not callable(self.event_cbs[name]):
 			return False
