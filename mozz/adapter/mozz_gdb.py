@@ -129,6 +129,7 @@ class Adapter(mozz.adapter.Adapter):
 	
 		self.host = GDBHost(sess)
 		sess.notify_event_run(self.host)
+		self.host = None
 	
 	def init_cmds(self):
 		ad = self

@@ -3,6 +3,7 @@ import imp
 import os
 
 import mozz.err
+import mozz.util
 
 class AdapterErr(mozz.err.Err):
 	pass
@@ -45,7 +46,7 @@ def gdb_run(options):
 class Adapter(object):
 	
 	def filepath_module_name(self, fpath):
-		return re.sub(r'\.py$', '', os.path.basename(fpath))
+		mozz.util.python_file_basename(fpath)
 
 	def import_session_file(self, fpath):
 		mname = self.filepath_module_name(fpath)

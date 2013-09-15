@@ -1,6 +1,20 @@
 import sys
 import unittest
+import mozz.util
 
-#helper file for tests
+#helper function for test module
 def run_test_module(name, file):
-	return unittest.main(module=sys.modules[name], argv=[file], verbosity=2, exit=False)
+	outputfile = mozz.util.python_path_basename(file) + '.out'
+
+	m = sys.modules[name]
+	ldr = unittest.loader.defaultTestLoader
+	tests = ldr.loadTestsFromModule(m)
+
+	with open(outputfile, 'w') as f:
+		duper = mozz.util.IOWriteDuplicator(
+			sys.stderr, f
+		)
+		unittest.runner.TextTestRunner(
+			verbosity = 2,
+			stream = duper
+		).run(tests)
