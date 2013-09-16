@@ -50,24 +50,18 @@ def convert_ints_to_addrs(*args):
 
 class Session(object):
 
-	def __init__(self, name):
-		self.name = name
-		self.event_cbs = {
-			"run":		self.__class__.default_run
-		}
+	def __init__(self, target, limit=0):
+		self.event_cbs = {}
 		self.addr_cbs = {}
 		self.mockups = {}
 		self.skip_map = {}
 		self.n = 0
-		self.target = None
+		self.target = target
 		self.flags = {}
-
-	@staticmethod
-	def default_run(host):
-		host.run_inferior()
-
-	def set_target(self, filename):
-		self.target = filename
+		if limit >= 0:
+			self.limit = limit
+		else:
+			self.limit = 0
 
 	def set_target_rel(self, sess_file, rel_filename):
 		self.target = os.path.join(

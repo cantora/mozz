@@ -11,6 +11,8 @@ class Host(object):
 		self.session = session
 		self.inf = None
 		self._drop_into_cli = False
+		self.inferior_procs = []
+		self.about_to_start_inferior = False
 
 	def log(self, s):
 		raise NotImplementedException("not implemented")
@@ -56,7 +58,7 @@ class Host(object):
 		'''
 		self.session.clear_flags()
 		self.set_breakpoints()
-
+		self.about_to_start_inferior = True
 		return self._run_inferior(*args, **kwargs)
 
 	def _run_inferior(self, *args, **kwargs):
@@ -64,6 +66,29 @@ class Host(object):
 		internal method for subclasses to override
 		'''
 		raise NotImplementedError("not implemented")
+
+
+	def continue_inferior(self):
+		'''
+		if run_inferior returned while the inferior was still
+		alive (but stopped), this will continue the inferior.
+		this should be able to be called indefinitely until
+		the inferior exits and may return will the inferior is
+		still alive but stopped.
+		'''
+
+		while self.should_continue():
+			if self.need_to_flush_inferior_procs():
+				self.flush_inferior_procs()
+
+			if self.drop_into_cli():
+				self.clear_drop_into_cli()
+				return 
+			print("host: continue")
+			self.inferior().cont()
+
+		self.clear_inferior()
+		return
 
 	def invoke_callback(self, key, *args, **kwargs):
 		args = (self,) + args
@@ -107,12 +132,54 @@ class Host(object):
 		'''
 		return (self._drop_into_cli == True)
 
+	def with_inferior(self, *args, **kwargs):
+		'''
+		schedule a change to the inferior. modifications of 
+		inferior memory/registers/(any kind of process state)
+		should be done within the function decorated by this
+		method. this allows the implementation host to ensure
+		that the changes are made safely.
+		'''
+		def dec(fn):
+			self.inferior_procs.append( (fn, args, kwargs) )
+			return fn
+
+		return dec
+
+	def flush_inferior_procs(self):
+		for (fn, args, kwargs) in self.inferior_procs:
+			fn(self, *args, **kwargs)
+
+		self.inferior_procs = []
+
+	def need_to_flush_inferior_procs(self):
+		return len(self.inferior_procs) > 0
+
 	def on_break(self):
+		'''
+		only invokes callbacks to session for address at pc,
+		doesnt notify the inferior of a break, because we 
+		dont necessarily consider a 'break' to be a 'stop';
+		rather, a 'break' may cause a 'stop', in which case
+		the `on_break_and_stop` callback should be invoked
+		following this callback
+		'''
 		if self.ignore_callback():
 			return False
 		
-		self.inferior().on_break()
 		return self.invoke_callback(self.inferior().reg_pc())
+
+	def on_break_and_stop(self):
+		'''
+		this doesnt invoke callbacks to the session as it
+		assumes that the session was already notified via
+		a call to `on_break`. this only notifies the inferior
+		that it has stopped because of a break.
+		'''
+		if self.ignore_callback():
+			return False
+
+		self.inferior().on_break()
 
 	def on_stop(self, signal):
 		if self.ignore_callback():
@@ -132,6 +199,10 @@ class Host(object):
 	def on_start(self):
 		if self.ignore_callback():
 			return False
+
+		if self.about_to_start_inferior == True:
+			self.about_to_start_inferior = False
+			self.invoke_callback(mozz.cb.INFERIOR_PRE)
 
 		self.inferior().on_start()
 		return self.invoke_callback(mozz.cb.START)
@@ -176,6 +247,36 @@ class Inf(object):
 				setattr(self, int_name, kwargs[name])
 			else:
 				setattr(self, int_name, DefaultIOConfig(mode))
+
+	def run(self, *args):
+		'''
+		run this inferior until the first stop
+		'''
+		if self.state() != "dead":
+			raise InfErr("tried to run a non-dead inferior")
+
+		return self._run(*args)
+
+	def _run(self, *args):
+		'''
+		internal (for subclasses): run this inferior until the first stop
+		'''
+		raise NotImplementedError("not implemented")
+		
+	def cont(self):
+		'''
+		cause a stopped inferior to continue
+		'''
+		if self.state() != "stopped":
+			raise InfErr("tried to continue a non-stopped inferior")
+
+		return self._cont()
+
+	def _cont(self):
+		'''
+		internal: cause a stopped inferior to continue
+		'''
+		raise NotImplementedError("not implemented")
 
 	def cleanup(self):
 		if self.state() != "dead":

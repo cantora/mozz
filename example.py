@@ -3,17 +3,16 @@
 import mozz
 import mozz.sig
 
-s = mozz.Session("test1")
-
-s.set_target("./example-bin")
+s = mozz.Session("./example-bin")
 
 @s.at_entry()
 def at_entry(host):
 	host.log("program entry %d" % host.session.iteration())
 
-@s.at_addr(0x004005c3)
+@s.at_addr(0x0040071a)
 def at_main(host):
 	host.log("at main %d" % host.session.iteration())
+	host.set_drop_into_cli()
 
 '''
 @s.mockup(0x40077b, 0x4007a5)

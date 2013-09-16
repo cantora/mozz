@@ -1,5 +1,6 @@
 import gdb
 import os
+import threading
 
 import mozz.host
 import mozz.adapter
@@ -11,12 +12,21 @@ class BrkPoint(gdb.Breakpoint):
 		self.host = host
 
 	def stop(self):
+		print("mozz_gdb bp %d: hit_count=%r, visible=%r" % (
+			self.number, self.hit_count, self.visible
+			
+		))
+
 		self.host.on_break()
 		if self.host.drop_into_cli():
-			self.host.clear_drop_into_cli()
+			return True
+
+		if self.host.need_to_flush_inferior_procs():
+			gdb.post_event(lambda: self.host.flush_inferior_procs())
 			return True
 
 		return False
+
 
 	
 class GDBInf(mozz.host.Inf):
@@ -72,6 +82,25 @@ class GDBInf(mozz.host.Inf):
 		#if frame.type() != gdb.NORMAL_FRAME:
 		#	raise Exception("expected frame.type == NORMAL_FRAME. got: %s" % frame.type())
 
+	def _run(self, *args):
+		cmd = "run "
+
+		if len(args) > 0:
+			cmd += " ".join(args)
+
+		if self.stdin().filename():
+			cmd += "< %s " % (self.stdin().filename())
+
+		if self.stdout().filename():
+			cmd += "> %s " % (self.stdout().filename())
+
+		if self.stderr().filename():
+			cmd += "2> %s " % (self.stderr().filename())
+
+		gdb.execute(cmd)
+
+	def _cont(self):
+		gdb.execute("continue")
 
 class GDBHost(mozz.host.Host):
 
@@ -96,7 +125,7 @@ class GDBHost(mozz.host.Host):
 			self.on_stop(event.stop_signal)
 
 		elif isinstance(event, gdb.BreakpointEvent):
-			self.on_break()
+			self.on_break_and_stop()
 
 
 	def gdb_cont(self, event):
@@ -119,28 +148,11 @@ class GDBHost(mozz.host.Host):
 			raise mozz.host.HostErr("session target error: %s" % e)
 
 		self.set_inferior(GDBInf(gdb.selected_inferior().num, **kwargs))
-		cmd = "run "
-
-		if len(args) > 0:
-			cmd += " ".join(args)
-
-		if self.inferior().stdin().filename():
-			cmd += "< %s " % (self.inferior().stdin().filename())
-
-		if self.inferior().stdout().filename():
-			cmd += "> %s " % (self.inferior().stdout().filename())
-
-		if self.inferior().stderr().filename():
-			cmd += "2> %s " % (self.inferior().stderr().filename())
-
-		self.invoke_callback(mozz.cb.INFERIOR_PRE)
 		#runs the inferior until the first stop
-		gdb.execute(cmd)
+		self.inferior().run(*args)
+		print("finished first exec")
 		
-		while self.should_continue():
-			gdb.execute("cont")
-
-		self.clear_inferior()
+		return self.continue_inferior()
 
 
 class Cmd(gdb.Command):
@@ -150,10 +162,47 @@ class Cmd(gdb.Command):
 		super (Cmd, self).__init__(self.name, type)
 
 class Adapter(mozz.adapter.Adapter):
-	
-	def __init__(self):
-		self.host = None
 
+	class State(mozz.util.StateMachine):
+		IMPORTED 	= 'imported'
+		READY 		= 'ready'
+		RUNNING 	= 'running'
+		STOPPED 	= 'stopped'
+		
+		def __init__(self, log=None):
+			super(Adapter.State, self).__init__(log)
+			self.reset()
+
+		def reset(self):
+			self.host = None
+			self.sess = None
+			self.event = None
+
+		def trans_init_imported(self):
+			self.event = threading.Event()
+
+		def trans_imported_ready(self, sess):
+			self.sess = sess
+			self.event.set()
+
+		def trans_ready_running(self):
+			self.event.wait()
+			self.host = GDBHost(self.sess)
+
+		def trans_running_stopped(self):
+			pass
+
+		def trans_stopped_running(self):
+			pass
+
+		def trans_running_init(self):
+			self.reset()
+
+			
+	def __init__(self):
+		def log_state(s):
+			print(s)
+		self.state = self.State(log_state)
 		gdb.execute("set python print-stack full")
 		gdb.execute("set pagination off")
 		
@@ -165,12 +214,70 @@ class Adapter(mozz.adapter.Adapter):
 		gdb.events.exited.connect(self.on_exit)
 
 	def run_session(self, sess):
-		if not self.host is None:
-			raise Exception("host already exists")
+		finished = threading.Event()
+		@self.state.register_callback(self.state.RUNNING, self.state.INIT)
+		def on_finish():
+			finished.set()					
+
+		self.state.transition(self.state.READY, sess)
+		finished.wait()
+		self.state.delete_callback(
+			self.state.RUNNING,
+			self.state.INIT, 
+			on_finish
+		)
+
+	def import_session(self, fpath):		
+		t = threading.Thread(target=self.import_session_file, args=(fpath,))
+		t.start()
+
+	def cmd_run(self, fpath):
+		self.state.transition(self.state.IMPORTED)
+		self.import_session(fpath)
+
+		self.state.event.wait()
+		self.state.transition(self.state.RUNNING)
+		self.state.host.session.notify_event_run(self.state.host)
+		self.state.host.run_inferior()
+		self.trans_to_stopped_or_init()
+
+	def trans_to_stopped_or_init(self):
+		if self.state.host.has_inferior():
+			state = self.state.STOPPED
+		else:
+			state = self.state.INIT
+
+		self.state.transition(state)
+
+	def cmd_cont(self):
+		self.state.transition(self.state.RUNNING)
+		self.state.host.continue_inferior()
+		self.trans_to_stopped_or_init()
+
+	def running_or_stopped(self):
+		return self.state.currently(
+			self.state.RUNNING,
+			self.state.STOPPED
+		)
+
+	def on_stop(self, event):
+		if self.running_or_stopped():
+			self.state.host.gdb_stop(event)
 	
-		self.host = GDBHost(sess)
-		sess.notify_event_run(self.host)
-		self.host = None
+	def on_cont(self, event):
+		if self.running_or_stopped():
+			self.state.host.gdb_cont(event)
+	
+	def on_exit(self, event):
+		if self.running_or_stopped():
+			self.state.host.gdb_exit(event)
+	
+	def run(self, options):
+		if options.session:
+			gdb.execute("mozz-run %s" % options.session)
+			#raise Exception("TODO figure out where to quit after one session completes")
+			#if options.exit:
+			#	gdb.execute("quit")
 	
 	def init_cmds(self):
 		ad = self
@@ -189,29 +296,19 @@ class Adapter(mozz.adapter.Adapter):
 					print("invalid session %r" % arg)
 					self.usage()
 				else:
-					try:
-						ad.import_session_file(arg)
-					except mozz.host.HostErr as e:
-						print(str(e))
-	
+					ad.cmd_run(arg)
+
 		Run()
+
+		class Cont(Cmd):
+			"""continue the stopped session."""
 	
-	def on_stop(self, event):
-		if self.host is not None:
-			self.host.gdb_stop(event)
+			def __init__(self):
+				super(Cont, self).__init__("cont", gdb.COMMAND_RUNNING)
 	
-	def on_cont(self, event):
-		if self.host is not None:
-			self.host.gdb_cont(event)
-	
-	def on_exit(self, event):
-		if self.host is not None:
-			self.host.gdb_exit(event)
-	
-	def run(self, options):
-		if options.session:
-			#gdb.post_event(lambda : gdb.execute("mozz-run %s" % options.session))
-			gdb.execute("mozz-run %s" % options.session)
-			if options.exit:
-				gdb.execute("quit")
+			def invoke(self, arg, from_tty):
+				self.dont_repeat()
+				ad.cmd_cont()
+
+		Cont()
 	
