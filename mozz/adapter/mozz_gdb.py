@@ -5,7 +5,7 @@ import threading
 import mozz.host
 import mozz.adapter
 
-class BrkPoint(gdb.Breakpoint):
+class BrkPoint(gdb.Breakpoint, mozz.host.Breakpoint):
 
 	def __init__(self, host, *args, **kwargs):
 		super(BrkPoint, self).__init__(*args, **kwargs)
@@ -139,7 +139,7 @@ class GDBHost(mozz.host.Host):
 		self.on_exit()
 
 	def set_breakpoint(self, addr):
-		BrkPoint(self, spec=("*0x%x" % addr), type=gdb.BP_BREAKPOINT, internal=True)
+		return BrkPoint(self, spec=("*0x%x" % addr), type=gdb.BP_BREAKPOINT, internal=True)
 
 	def _run_inferior(self, *args, **kwargs):
 		try:
@@ -161,7 +161,7 @@ class Cmd(gdb.Command):
 		self.name = "mozz-"+name
 		super (Cmd, self).__init__(self.name, type)
 
-class Adapter(mozz.adapter.Adapter):
+class GDBAdapter(mozz.adapter.Adapter):
 
 	class State(mozz.util.StateMachine):
 		IMPORTED 	= 'imported'
@@ -170,27 +170,35 @@ class Adapter(mozz.adapter.Adapter):
 		STOPPED 	= 'stopped'
 		
 		def __init__(self, log=None):
-			super(Adapter.State, self).__init__(log)
+			super(GDBAdapter.State, self).__init__(log)
 			self.reset()
 
 		def reset(self):
 			self.host = None
 			self.sess = None
-			self.event = None
+			self.ready_event = None
+
+		def session(self):
+			return self.host.session
 
 		def trans_init_imported(self):
-			self.event = threading.Event()
+			self.ready_event = threading.Event()
 
 		def trans_imported_ready(self, sess):
 			self.sess = sess
-			self.event.set()
+			self.ready_event.set()
+
+		def wait_for_ready(self):
+			self.ready_event.wait()
 
 		def trans_ready_running(self):
-			self.event.wait()
 			self.host = GDBHost(self.sess)
 
 		def trans_running_stopped(self):
 			pass
+
+		def trans_running_ready(self):
+			self.host = None
 
 		def trans_stopped_running(self):
 			pass
@@ -199,7 +207,8 @@ class Adapter(mozz.adapter.Adapter):
 			self.reset()
 
 			
-	def __init__(self):
+	def __init__(self, options):
+		super(GDBAdapter, self).__init__(options)
 		def log_state(s):
 			print(s)
 		self.state = self.State(log_state)
@@ -235,24 +244,41 @@ class Adapter(mozz.adapter.Adapter):
 		self.state.transition(self.state.IMPORTED)
 		self.import_session(fpath)
 
-		self.state.event.wait()
-		self.state.transition(self.state.RUNNING)
-		self.state.host.session.notify_event_run(self.state.host)
-		self.state.host.run_inferior()
-		self.trans_to_stopped_or_init()
+		self.state.wait_for_ready()
+		return self.cmd_cont(True)
 
-	def trans_to_stopped_or_init(self):
+	def trans_from_running(self):
 		if self.state.host.has_inferior():
 			state = self.state.STOPPED
-		else:
+		elif self.state.session().get_flag_finished():
 			state = self.state.INIT
+		else:
+			state = self.state.READY
 
 		self.state.transition(state)
+		return state
 
-	def cmd_cont(self):
-		self.state.transition(self.state.RUNNING)
-		self.state.host.continue_inferior()
-		self.trans_to_stopped_or_init()
+	def cmd_cont(self, session_starting=False):
+		prev = self.state.transition(self.state.RUNNING)
+
+		if session_starting:
+			#notify that the session is about to start
+			self.state.session().notify_event_run(self.state.host)
+		
+		while True:
+			if prev == self.state.READY:
+				self.state.host.run_inferior()
+			elif prev == self.state.STOPPED:
+				self.state.host.continue_inferior()
+		
+			state = self.trans_from_running()
+			if state == self.state.INIT and self.options.exit:
+				gdb.execute("quit")
+				raise Exception("shouldnt get here")
+			elif state != self.state.READY:
+				break
+			
+			prev = self.state.transition(self.state.RUNNING)
 
 	def running_or_stopped(self):
 		return self.state.currently(
@@ -272,12 +298,9 @@ class Adapter(mozz.adapter.Adapter):
 		if self.running_or_stopped():
 			self.state.host.gdb_exit(event)
 	
-	def run(self, options):
-		if options.session:
-			gdb.execute("mozz-run %s" % options.session)
-			#raise Exception("TODO figure out where to quit after one session completes")
-			#if options.exit:
-			#	gdb.execute("quit")
+	def run(self):
+		if self.options.session:
+			gdb.execute("mozz-run %s" % self.options.session)
 	
 	def init_cmds(self):
 		ad = self

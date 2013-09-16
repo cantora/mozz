@@ -3,7 +3,7 @@
 import mozz
 import mozz.sig
 
-s = mozz.Session("./example-bin")
+s = mozz.Session("./example-bin", 2)
 
 @s.at_entry()
 def at_entry(host):

@@ -4,6 +4,14 @@ import mozz.sig
 	
 class HostErr(mozz.err.Err):
 	pass
+
+class Breakpoint(object):
+	
+	def delete(self):
+		'''
+		deletes the breakpoint and invalidates this object
+		'''
+		raise NotImplementedError("not implemented")
 	
 class Host(object):
 
@@ -13,6 +21,7 @@ class Host(object):
 		self._drop_into_cli = False
 		self.inferior_procs = []
 		self.about_to_start_inferior = False
+		self.bps = []
 
 	def log(self, s):
 		raise NotImplementedException("not implemented")
@@ -33,6 +42,7 @@ class Host(object):
 		self.inf = inf
 
 	def clear_inferior(self):
+		self.clear_breakpoints()
 		if self.inf:
 			self.inf.cleanup()
 
@@ -108,9 +118,23 @@ class Host(object):
 
 	def set_breakpoints(self):
 		for addr in self.session.each_break_addr():
-			self.set_breakpoint(addr)
+			bp = self.set_breakpoint(addr)
+			if bp is None:
+				raise Exception("invalid breakpoint %r" % bp)
+
+			self.bps.append(bp)
+
+	def clear_breakpoints(self):
+		for bp in self.bps:
+			bp.delete()
+
+		self.bps = []
 
 	def set_breakpoint(self, addr):
+		'''
+		returns a breakpoint object. the object should support the
+		interface defined by the Breakpoint class above.
+		'''
 		raise NotImplementedError("not implemented")
 
 	def set_drop_into_cli(self):

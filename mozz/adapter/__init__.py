@@ -36,15 +36,18 @@ def gdb_run(options):
 		f.write("from mozz.adapter import mozz_gdb\n")
 		f.write("with open(%r, 'r') as f:\n" % (f_args))
 		f.write("\tmozz_opts = pickle.load(f)\n")
-		f.write("ad = mozz_gdb.Adapter()\n")
+		f.write("ad = mozz_gdb.GDBAdapter(mozz_opts)\n")
 		f.write("mozz.adapter.set_current(ad)\n")
-		f.write("ad.run(mozz_opts)\n")
+		f.write("ad.run()\n")
 
 	os.execlp("gdb", "gdb", "-x", f_boot, *options.host_args)
 	raise Exception("shouldnt get here")
 
 class Adapter(object):
 	
+	def __init__(self, options):
+		self.options = options
+
 	def filepath_module_name(self, fpath):
 		mozz.util.python_file_basename(fpath)
 

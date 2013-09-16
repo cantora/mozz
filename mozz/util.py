@@ -112,13 +112,14 @@ class StateMachine(object):
 
 	def transition(self, to_state, *args, **kwargs):
 		self.lock.acquire()
+		edge = (self.state, to_state)
+
 		try:
-			edge = (self.state, to_state)
 			trans = 'trans_%s_%s' % edge
 			fn = getattr(self, trans, False)
 			if not fn or not callable(fn):
-				raise Exception("no such transition from %s " + \
-								"to %s" % (self.state, to_state))
+				raise Exception(("no such transition from %s " + \
+								"to %s") % (self.state, to_state))
 
 			self.log(("transition %s -> %s, " % edge) + \
 						"args=%r, kwargs=%r" % (args, kwargs))
@@ -131,3 +132,5 @@ class StateMachine(object):
 				cb_fn(*cb_args, **cb_kwargs)
 		finally:
 			self.lock.release()
+
+		return edge[0] #return previous state

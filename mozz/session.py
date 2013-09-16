@@ -50,7 +50,7 @@ def convert_ints_to_addrs(*args):
 
 class Session(object):
 
-	def __init__(self, target, limit=0):
+	def __init__(self, target, limit=1):
 		self.event_cbs = {}
 		self.addr_cbs = {}
 		self.mockups = {}
@@ -58,10 +58,11 @@ class Session(object):
 		self.n = 0
 		self.target = target
 		self.flags = {}
+		self.flag_finished = False
 		if limit >= 0:
 			self.limit = limit
 		else:
-			self.limit = 0
+			self.limit = 1
 
 	def set_target_rel(self, sess_file, rel_filename):
 		self.target = os.path.join(
@@ -128,7 +129,7 @@ class Session(object):
 		(addr, end) = convert_ints_to_addrs(addr, end)
 		self.skip_map[addr] = end
 
-	def to_run(self):
+	def on_run(self):
 		'''
 		invoke this callback when the host is ready to
 		run the session.
@@ -153,6 +154,10 @@ class Session(object):
 	def process_event(self, name, *args, **kwargs):
 		if name == mozz.cb.INFERIOR_PRE:
 			self.n += 1
+		elif name == mozz.cb.INFERIOR_POST:
+			if self.limit > 0 and self.n >= self.limit:
+				print("set flag finished")
+				self.set_flag_finished()
 		
 	def notify_event(self, name, *args, **kwargs):
 		self.process_event(name, *args, **kwargs)
@@ -206,6 +211,17 @@ class Session(object):
 
 	def get_flag_stop(self):
 		return self.get_flag("stop")
+
+	def set_flag_finished(self):
+		'''
+		once set, this flag shouldnt be
+		reset by `clear_flags`, so we dont use
+		the dictionary for this flag
+		'''
+		self.flag_finished = True
+
+	def get_flag_finished(self):
+		return self.flag_finished
 
 	def each_break_addr(self):
 		for addr in self.addr_cbs.keys():
