@@ -4,6 +4,7 @@ import os
 
 import mozz.err
 import mozz.util
+import mozz.log
 
 class AdapterErr(mozz.err.Err):
 	pass
@@ -30,15 +31,17 @@ def gdb_run(options):
 		pickle.dump(options, f)
 	f_boot = "/tmp/mozz-bootstrap.py"
 	with open(f_boot, 'w') as f:
-		f.write("sys.path.append(%r)\n" % (code_dir))
-		f.write("import pickle\n")
-		f.write("import mozz.adapter\n")
-		f.write("from mozz.adapter import mozz_gdb\n")
-		f.write("with open(%r, 'r') as f:\n" % (f_args))
-		f.write("\tmozz_opts = pickle.load(f)\n")
-		f.write("ad = mozz_gdb.GDBAdapter(mozz_opts)\n")
-		f.write("mozz.adapter.set_current(ad)\n")
-		f.write("ad.run()\n")
+		map(f.write, [
+			"sys.path.append(%r)\n" % (code_dir),
+			"import pickle\n",
+			"import mozz.adapter\n",
+			"from mozz.adapter import mozz_gdb\n",
+			"with open(%r, 'r') as f:\n" % (f_args),
+			"\tmozz_opts = pickle.load(f)\n",
+			"ad = mozz_gdb.GDBAdapter(mozz_opts)\n",
+			"mozz.adapter.set_current(ad)\n",
+			"ad.run()\n"
+		])
 
 	os.execlp("gdb", "gdb", "-x", f_boot, *options.host_args)
 	raise Exception("shouldnt get here")

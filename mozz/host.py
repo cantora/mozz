@@ -94,7 +94,7 @@ class Host(object):
 			if self.drop_into_cli():
 				self.clear_drop_into_cli()
 				return 
-			print("host: continue")
+			mozz.debug("host: continue")
 			self.inferior().cont()
 
 		self.clear_inferior()
@@ -112,7 +112,7 @@ class Host(object):
 			raise TypeError("unexpected callback key %r" % key)
 
 		#if key[0:3] != "SIG" and not result:
-		#	print("callback %r not handled" % key)
+		#	mozz.debug("callback %r not handled" % key)
 
 		return result
 

@@ -64,12 +64,6 @@ class Session(object):
 		else:
 			self.limit = 1
 
-	def set_target_rel(self, sess_file, rel_filename):
-		self.target = os.path.join(
-			os.path.dirname(os.path.abspath(sess_file)),
-			rel_filename
-		)
-
 	def iteration(self):
 		return self.n
 
@@ -156,7 +150,6 @@ class Session(object):
 			self.n += 1
 		elif name == mozz.cb.INFERIOR_POST:
 			if self.limit > 0 and self.n >= self.limit:
-				print("set flag finished")
 				self.set_flag_finished()
 		
 	def notify_event(self, name, *args, **kwargs):

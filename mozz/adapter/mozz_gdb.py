@@ -1,9 +1,11 @@
 import gdb
 import os
 import threading
+import traceback
 
 import mozz.host
 import mozz.adapter
+import mozz.log
 
 class BrkPoint(gdb.Breakpoint, mozz.host.Breakpoint):
 
@@ -12,7 +14,7 @@ class BrkPoint(gdb.Breakpoint, mozz.host.Breakpoint):
 		self.host = host
 
 	def stop(self):
-		print("mozz_gdb bp %d: hit_count=%r, visible=%r" % (
+		mozz.debug("mozz_gdb bp %d: hit_count=%r, visible=%r" % (
 			self.number, self.hit_count, self.visible
 			
 		))
@@ -56,7 +58,7 @@ class GDBInf(mozz.host.Inf):
 
 	def dump(self):
 		inf = self.gdb_inf()
-		print("inferior attrs: num=%r, pid=%r, is_valid=%r" % (
+		mozz.debug("inferior attrs: num=%r, pid=%r, is_valid=%r" % (
 			inf.num, inf.pid, inf.is_valid()
 		))
 
@@ -108,7 +110,7 @@ class GDBHost(mozz.host.Host):
 		super(GDBHost, self).__init__(session)
 
 	def log(self, s):
-		print(s)
+		mozz.debug(s)
 
 	def selected_is_my_inf(self):
 		return gdb.selected_inferior().num == self.inferior().inf_id
@@ -118,7 +120,7 @@ class GDBHost(mozz.host.Host):
 			or (not self.selected_is_my_inf())
 
 	def gdb_stop(self, event):
-		#print("gdb stop event: signal=%r" % event.stop_signal)
+		#mozz.debug("gdb stop event: signal=%r" % event.stop_signal)
 
 		if isinstance(event, gdb.SignalEvent):
 			#gdb seems to use the same names as python std lib for signals
@@ -129,12 +131,12 @@ class GDBHost(mozz.host.Host):
 
 
 	def gdb_cont(self, event):
-		#print("cont event: %r" % event)
+		#mozz.debug("cont event: %r" % event)
 
 		self.on_start()
 
 	def gdb_exit(self, event):
-		#print("exit event: %r" % event)
+		#mozz.debug("exit event: %r" % event)
 
 		self.on_exit()
 
@@ -150,7 +152,7 @@ class GDBHost(mozz.host.Host):
 		self.set_inferior(GDBInf(gdb.selected_inferior().num, **kwargs))
 		#runs the inferior until the first stop
 		self.inferior().run(*args)
-		print("finished first exec")
+		mozz.debug("finished first exec")
 		
 		return self.continue_inferior()
 
@@ -168,6 +170,8 @@ class GDBAdapter(mozz.adapter.Adapter):
 		READY 		= 'ready'
 		RUNNING 	= 'running'
 		STOPPED 	= 'stopped'
+		IMPORT_FAIL = 'import_fail'
+		FINISHED	= 'finished'
 		
 		def __init__(self, log=None):
 			super(GDBAdapter.State, self).__init__(log)
@@ -183,6 +187,12 @@ class GDBAdapter(mozz.adapter.Adapter):
 
 		def trans_init_imported(self):
 			self.ready_event = threading.Event()
+
+		def trans_imported_import_fail(self):
+			self.ready_event.set()
+
+		def trans_import_fail_init(self):
+			self.reset()
 
 		def trans_imported_ready(self, sess):
 			self.sess = sess
@@ -203,15 +213,18 @@ class GDBAdapter(mozz.adapter.Adapter):
 		def trans_stopped_running(self):
 			pass
 
-		def trans_running_init(self):
+		def trans_running_finished(self):
+			pass
+
+		def trans_finished_init(self):
 			self.reset()
 
 			
 	def __init__(self, options):
 		super(GDBAdapter, self).__init__(options)
-		def log_state(s):
-			print(s)
-		self.state = self.State(log_state)
+		mozz.log.set_default_logger(verbosity=options.verbose)
+
+		self.state = self.State(mozz.debug)
 		gdb.execute("set python print-stack full")
 		gdb.execute("set pagination off")
 		
@@ -224,7 +237,7 @@ class GDBAdapter(mozz.adapter.Adapter):
 
 	def run_session(self, sess):
 		finished = threading.Event()
-		@self.state.register_callback(self.state.RUNNING, self.state.INIT)
+		@self.state.register_callback(self.state.RUNNING, self.state.FINISHED)
 		def on_finish():
 			finished.set()					
 
@@ -232,9 +245,25 @@ class GDBAdapter(mozz.adapter.Adapter):
 		finished.wait()
 		self.state.delete_callback(
 			self.state.RUNNING,
-			self.state.INIT, 
+			self.state.FINISHED, 
 			on_finish
 		)
+
+	def import_session_file(self, fpath):
+		itr = self.state.iteration()
+		try:
+			super(GDBAdapter, self).import_session_file(fpath)
+		except Exception as e:
+			mozz.debug("failed to import session %r: %s" % (fpath, e))
+
+		#if we never set the state to READY, `cmd_run` is still
+		#waiting, so we have to release it
+		if itr == self.state.iteration() \
+				and self.state.currently(self.state.IMPORTED):
+			self.state.transition(self.state.IMPORT_FAIL)
+		else:
+			#else reset the state so it can accept a new session
+			self.state.transition(self.state.INIT)
 
 	def import_session(self, fpath):		
 		t = threading.Thread(target=self.import_session_file, args=(fpath,))
@@ -245,13 +274,18 @@ class GDBAdapter(mozz.adapter.Adapter):
 		self.import_session(fpath)
 
 		self.state.wait_for_ready()
+		if not self.state.currently(self.state.READY): 
+			#session file caused and error
+			self.state.transition(self.state.INIT)
+			raise Exception("failed to load session %r" % fpath)
+
 		return self.cmd_cont(True)
 
 	def trans_from_running(self):
 		if self.state.host.has_inferior():
 			state = self.state.STOPPED
 		elif self.state.session().get_flag_finished():
-			state = self.state.INIT
+			state = self.state.FINISHED
 		else:
 			state = self.state.READY
 
@@ -272,10 +306,21 @@ class GDBAdapter(mozz.adapter.Adapter):
 				self.state.host.continue_inferior()
 		
 			state = self.trans_from_running()
-			if state == self.state.INIT and self.options.exit:
+			if self.options.exit and state == self.state.FINISHED:
+				#if this is a one shot, we want to exit but we need
+				#to wait until the session finishes. when the session
+				#is done it will cause a state change from FINISHED 
+				#to INIT; at that point we are clear to quit from GDB.
+				session_done = threading.Event()
+				@self.state.register_callback(self.state.FINISHED, self.state.INIT)
+				def exit_after_sess():
+					session_done.set()
+
+				session_done.wait()
 				gdb.execute("quit")
 				raise Exception("shouldnt get here")
-			elif state != self.state.READY:
+
+			if state != self.state.READY:
 				break
 			
 			prev = self.state.transition(self.state.RUNNING)
@@ -302,6 +347,10 @@ class GDBAdapter(mozz.adapter.Adapter):
 		if self.options.session:
 			gdb.execute("mozz-run %s" % self.options.session)
 	
+	def err_exit(self, s, e):
+		print("%s: %s\n%s" % (s, e, traceback.format_exc()))
+		gdb.execute("quit")
+
 	def init_cmds(self):
 		ad = self
 		class Run(Cmd):
@@ -314,12 +363,15 @@ class GDBAdapter(mozz.adapter.Adapter):
 				print("usage: %s FILEPATH" % (self.name))
 				
 			def invoke(self, arg, from_tty):
-				self.dont_repeat()
-				if not os.path.isfile(arg):
-					print("invalid session %r" % arg)
-					self.usage()
-				else:
-					ad.cmd_run(arg)
+				try:
+					self.dont_repeat()
+					if not os.path.isfile(arg):
+						print("invalid session %r" % arg)
+						self.usage()
+					else:
+						ad.cmd_run(arg)
+				except Exception as e:
+					ad.err_exit("uncaught exception in %r command" % self.name, e)
 
 		Run()
 
@@ -330,8 +382,11 @@ class GDBAdapter(mozz.adapter.Adapter):
 				super(Cont, self).__init__("cont", gdb.COMMAND_RUNNING)
 	
 			def invoke(self, arg, from_tty):
-				self.dont_repeat()
-				ad.cmd_cont()
+				try:
+					self.dont_repeat()
+					ad.cmd_cont()
+				except Exception as e:
+					ad.err_exit("uncaught exception in %r command" % self.name, e)
 
 		Cont()
 	

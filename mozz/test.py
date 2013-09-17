@@ -1,6 +1,7 @@
 import sys
 import unittest
 import mozz.util
+import os
 
 #helper function for test module
 def run_test_module(name, file):
@@ -18,3 +19,9 @@ def run_test_module(name, file):
 			verbosity = 2,
 			stream = duper
 		).run(tests)
+
+def abs_path(base_file, rel_path):
+	return os.path.join(
+		os.path.dirname(os.path.abspath(base_file)),
+		rel_path
+	)

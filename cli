@@ -6,7 +6,12 @@ def opt_parser():
 
 	parser = argparse.ArgumentParser(description='fuzz fuzz fuzz.')
 	parser.add_argument('session', nargs='?', help='session file', default=None)
-	parser.add_argument('-v', '--verbose', action='store_true', help='print debug output.')
+	parser.add_argument(
+		'-v',
+		'--verbose',
+		action='count',
+		help='print debug output. repeat to increase verbosity'
+	)
 	parser.add_argument(
 		'-d',
 		'--debugger',

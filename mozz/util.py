@@ -66,12 +66,19 @@ class StateMachine(object):
 
 	def __init__(self, log=None):
 		self.state = self.INIT
+		self.n = 0
 		self.lock = threading.Lock()
 		self.cbs = {}
 		if callable(log):
 			self.log = log
 		else:
 			self.log = self.default_log
+
+	def iteration(self):
+		self.lock.acquire()
+		result = self.n
+		self.lock.release()
+		return result
 
 	def currently(self, *args):
 		self.lock.acquire()
@@ -121,10 +128,14 @@ class StateMachine(object):
 				raise Exception(("no such transition from %s " + \
 								"to %s") % (self.state, to_state))
 
-			self.log(("transition %s -> %s, " % edge) + \
+			self.log(("transition (%d) " % self.n) + \
+						("%s -> %s, " % edge) + \
 						"args=%r, kwargs=%r" % (args, kwargs))
+
 			fn(*args, **kwargs)
 			self.state = to_state
+			if edge[1] == self.INIT:
+				self.n += 1
 
 			for (cb_fn, cb_args, cb_kwargs) in self.cbs.get(edge, []):
 				self.log("transition callback %s -> %s " % edge + \

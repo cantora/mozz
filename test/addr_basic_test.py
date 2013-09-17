@@ -1,14 +1,12 @@
 import unittest
 
 import mozz
-import mozz.test
+from mozz.test import run_test_module, abs_path
 
 class Test(unittest.TestCase):
 
 	def test_addr_basic(self):
-		s = mozz.Session("test_run_exit")
-		
-		s.set_target_rel(__file__, "addr_basic_test.bin")
+		s = mozz.Session(abs_path(__file__, "addr_basic_test.bin"))
 
 		d = {
 			'got_cb': False,
@@ -27,4 +25,4 @@ class Test(unittest.TestCase):
 		self.assertTrue(d['got_cb'])
 		self.assertFalse(d['got_sig'])
 
-mozz.test.run_test_module(__name__, __file__)
+run_test_module(__name__, __file__)
