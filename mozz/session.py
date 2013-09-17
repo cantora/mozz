@@ -130,6 +130,13 @@ class Session(object):
 		'''
 		return self.add_event_cb_fn("run")
 
+	def on_finish(self):
+		'''
+		invoke this callback when the session is finished
+		and about to be destroyed.
+		'''
+		return self.add_event_cb_fn("finish")
+
 	def on_signal_default(self):
 		return self.add_event_cb_fn(SIGNAL_DEFAULT)
 
@@ -180,6 +187,9 @@ class Session(object):
 
 	def notify_event_run(self, host):
 		return self.notify_event("run", host)
+
+	def notify_event_finish(self, host):
+		return self.notify_event("finish", host)
 
 	def clear_flags(self):
 		self.flags = {}

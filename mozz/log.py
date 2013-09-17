@@ -50,3 +50,10 @@ def warning(str):
 	else:
 		return None
 
+def error(str):
+	global log_obj
+	if log_obj:
+		return log_obj.error(str)
+	else:
+		return None
+

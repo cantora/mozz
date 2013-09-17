@@ -254,7 +254,7 @@ class GDBAdapter(mozz.adapter.Adapter):
 		try:
 			super(GDBAdapter, self).import_session_file(fpath)
 		except Exception as e:
-			mozz.debug("failed to import session %r: %s" % (fpath, e))
+			mozz.error("failed to import session %r: %s" % (fpath, e))
 
 		#if we never set the state to READY, `cmd_run` is still
 		#waiting, so we have to release it
@@ -262,6 +262,7 @@ class GDBAdapter(mozz.adapter.Adapter):
 				and self.state.currently(self.state.IMPORTED):
 			self.state.transition(self.state.IMPORT_FAIL)
 		else:
+			self.state.session().notify_event_finish(self.state.host)
 			#else reset the state so it can accept a new session
 			self.state.transition(self.state.INIT)
 
