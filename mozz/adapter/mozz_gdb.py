@@ -166,13 +166,13 @@ class Cmd(gdb.Command):
 class GDBAdapter(mozz.adapter.Adapter):
 
 	class State(mozz.util.StateMachine):
-		#INIT								#we are ready import a session file
-		IMPORTED 		= 'imported' 		#we are executing the session file
-		READY 			= 'ready'			#we have a session
-		RUNNING 		= 'running'			#the session has a running inferior
-		STOPPED 		= 'stopped'			#the inferior for the session has stopped
-		IMPORT_FAIL 	= 'import_fail'		#something went wrong while executing the session file
-		FINISHED		= 'finished'		#the current session has finished
+		#INIT                               #we are ready import a session file
+		EXECUTING       = 'executing'       #we are executing the session file
+		SESSION         = 'session'         #we have a session
+		RUNNING         = 'running'         #the session has a running inferior
+		STOPPED         = 'stopped'         #the inferior for the session has stopped
+		EXECFAIL        = 'execfail'        #something went wrong while executing the session file
+		FINISHED        = 'finished'        #the current session has finished
 		
 		def __init__(self, log=None):
 			super(GDBAdapter.State, self).__init__(log)
@@ -181,34 +181,29 @@ class GDBAdapter(mozz.adapter.Adapter):
 		def reset(self):
 			self.host = None
 			self.sess = None
-			self.ready_event = None
 
 		def session(self):
 			return self.host.session
 
-		def trans_init_imported(self):
-			self.ready_event = threading.Event()
+		def trans_init_executing(self):
+			pass
 
-		def trans_imported_import_fail(self):
-			self.ready_event.set()
+		def trans_executing_execfail(self):
+			pass
 
-		def trans_import_fail_init(self):
+		def trans_execfail_init(self):
 			self.reset()
 
-		def trans_imported_ready(self, sess):
+		def trans_executing_session(self, sess):
 			self.sess = sess
-			self.ready_event.set()
 
-		def wait_for_ready(self):
-			self.ready_event.wait()
-
-		def trans_ready_running(self):
+		def trans_session_running(self):
 			self.host = GDBHost(self.sess)
 
 		def trans_running_stopped(self):
 			pass
 
-		def trans_running_ready(self):
+		def trans_running_session(self):
 			self.host = None
 
 		def trans_stopped_running(self):
@@ -217,7 +212,7 @@ class GDBAdapter(mozz.adapter.Adapter):
 		def trans_running_finished(self):
 			pass
 
-		def trans_finished_ready(self, sess):
+		def trans_finished_session(self, sess):
 			self.reset()
 			self.sess = sess
 
@@ -242,7 +237,7 @@ class GDBAdapter(mozz.adapter.Adapter):
 
 	def run_session(self, sess):
 		wait = self.state.register_notify(None, self.state.FINISHED)
-		self.state.transition(self.state.READY, sess)
+		self.state.transition(self.state.SESSION, sess)
 		wait()
 
 		self.state.session().notify_event_finish(self.state.host)
@@ -254,11 +249,11 @@ class GDBAdapter(mozz.adapter.Adapter):
 		except Exception as e:
 			mozz.error("failed to import session %r: %s" % (fpath, e))
 
-		#if we never set the state to READY, `cmd_run` is still
+		#if we never set the state to SESSION, `cmd_run` is still
 		#waiting, so we have to release it
 		if itr == self.state.iteration() \
-				and self.state.currently(self.state.IMPORTED):
-			self.state.transition(self.state.IMPORT_FAIL)
+				and self.state.currently(self.state.EXECUTING):
+			self.state.transition(self.state.EXECFAIL)
 		else:
 			#reset the state so it can accept a new session
 			self.state.transition(self.state.INIT)
@@ -268,11 +263,12 @@ class GDBAdapter(mozz.adapter.Adapter):
 		t.start()
 
 	def cmd_run(self, fpath):
-		self.state.transition(self.state.IMPORTED)
+		wait = self.state.register_notify(self.state.EXECUTING, None)
+		self.state.transition(self.state.EXECUTING)
 		self.import_session(fpath)
 
-		self.state.wait_for_ready()
-		if not self.state.currently(self.state.READY): 
+		wait()
+		if not self.state.currently(self.state.SESSION): 
 			#session file caused and error
 			self.state.transition(self.state.INIT)
 			raise Exception("failed to load session %r" % fpath)
@@ -285,7 +281,7 @@ class GDBAdapter(mozz.adapter.Adapter):
 		elif self.state.session().get_flag_finished():
 			state = self.state.FINISHED
 		else:
-			state = self.state.READY
+			state = self.state.SESSION
 
 		return state
 
@@ -298,7 +294,7 @@ class GDBAdapter(mozz.adapter.Adapter):
 				self.state.session().notify_event_run(self.state.host)
 				session_starting = False
 			
-			if prev == self.state.READY:
+			if prev == self.state.SESSION:
 				self.state.host.run_inferior()
 			elif prev == self.state.STOPPED:
 				self.state.host.continue_inferior()
@@ -315,7 +311,7 @@ class GDBAdapter(mozz.adapter.Adapter):
 				#is done the state will change from FINISHED 
 				#to INIT only if the session file completes its execution.
 				#otherwise  it will run another session in which case we
-				#will transition to READY
+				#will transition to SESSION
 				wait()
 				#update the local state variable
 				state = self.state.current()
@@ -326,12 +322,12 @@ class GDBAdapter(mozz.adapter.Adapter):
 					#end of execution of the session file
 					gdb.execute("quit")
 					raise Exception("shouldnt get here")
-				elif state == self.state.READY:
+				elif state == self.state.SESSION:
 					session_starting = True
 			else:
 				self.state.transition(state)
 
-			if state != self.state.READY:
+			if state != self.state.SESSION:
 				break
 			
 			prev = self.state.transition(self.state.RUNNING)
