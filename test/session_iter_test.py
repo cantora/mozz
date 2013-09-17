@@ -1,23 +1,21 @@
 import unittest
 
 import mozz
-import mozz.test
+from mozz.test import run_test_module, abs_path
 
 class Test(unittest.TestCase):
 
 	def test_session_iter(self):
-		s = mozz.Session("test_session_iter")
-		
-		s.set_target_rel(__file__, "session_iter_test.bin")
+		s = mozz.Session(abs_path(__file__, "session_iter_test.bin"), 10)
 
-		@s.to_run()
-		def run(host):
-			for i in range(0, 10):
-				host.log("i=%d" % i)
-				host.run_inferior()
-				self.assertEqual(s.iteration(), i+1)
+		state = [0]
+		@s.on_inferior_pre()
+		def inf_pre(host):
+			state[0] += 1
+			mozz.debug("i=%d" % state[0])
+			self.assertEqual(s.iteration(), state[0])
 
 		mozz.run_session(s)
 		self.assertEqual(s.iteration(), 10)
 
-mozz.test.run_test_module(__name__, __file__)
+run_test_module(__name__, __file__)
