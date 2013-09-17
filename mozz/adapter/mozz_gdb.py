@@ -166,12 +166,13 @@ class Cmd(gdb.Command):
 class GDBAdapter(mozz.adapter.Adapter):
 
 	class State(mozz.util.StateMachine):
-		IMPORTED 	= 'imported'
-		READY 		= 'ready'
-		RUNNING 	= 'running'
-		STOPPED 	= 'stopped'
-		IMPORT_FAIL = 'import_fail'
-		FINISHED	= 'finished'
+		#INIT								#we are ready import a session file
+		IMPORTED 		= 'imported' 		#we are executing the session file
+		READY 			= 'ready'			#we have a session
+		RUNNING 		= 'running'			#the session has a running inferior
+		STOPPED 		= 'stopped'			#the inferior for the session has stopped
+		IMPORT_FAIL 	= 'import_fail'		#something went wrong while executing the session file
+		FINISHED		= 'finished'		#the current session has finished
 		
 		def __init__(self, log=None):
 			super(GDBAdapter.State, self).__init__(log)
@@ -216,6 +217,10 @@ class GDBAdapter(mozz.adapter.Adapter):
 		def trans_running_finished(self):
 			pass
 
+		def trans_finished_ready(self, sess):
+			self.reset()
+			self.sess = sess
+
 		def trans_finished_init(self):
 			self.reset()
 
@@ -236,18 +241,11 @@ class GDBAdapter(mozz.adapter.Adapter):
 		gdb.events.exited.connect(self.on_exit)
 
 	def run_session(self, sess):
-		finished = threading.Event()
-		@self.state.register_callback(self.state.RUNNING, self.state.FINISHED)
-		def on_finish():
-			finished.set()					
-
+		wait = self.state.register_notify(None, self.state.FINISHED)
 		self.state.transition(self.state.READY, sess)
-		finished.wait()
-		self.state.delete_callback(
-			self.state.RUNNING,
-			self.state.FINISHED, 
-			on_finish
-		)
+		wait()
+
+		self.state.session().notify_event_finish(self.state.host)
 
 	def import_session_file(self, fpath):
 		itr = self.state.iteration()
@@ -262,8 +260,7 @@ class GDBAdapter(mozz.adapter.Adapter):
 				and self.state.currently(self.state.IMPORTED):
 			self.state.transition(self.state.IMPORT_FAIL)
 		else:
-			self.state.session().notify_event_finish(self.state.host)
-			#else reset the state so it can accept a new session
+			#reset the state so it can accept a new session
 			self.state.transition(self.state.INIT)
 
 	def import_session(self, fpath):		
@@ -290,36 +287,49 @@ class GDBAdapter(mozz.adapter.Adapter):
 		else:
 			state = self.state.READY
 
-		self.state.transition(state)
 		return state
 
 	def cmd_cont(self, session_starting=False):
 		prev = self.state.transition(self.state.RUNNING)
 
-		if session_starting:
-			#notify that the session is about to start
-			self.state.session().notify_event_run(self.state.host)
-		
 		while True:
+			if session_starting:
+				#notify that the session is about to start
+				self.state.session().notify_event_run(self.state.host)
+				session_starting = False
+			
 			if prev == self.state.READY:
 				self.state.host.run_inferior()
 			elif prev == self.state.STOPPED:
 				self.state.host.continue_inferior()
 		
 			state = self.trans_from_running()
-			if self.options.exit and state == self.state.FINISHED:
-				#if this is a one shot, we want to exit but we need
-				#to wait until the session finishes. when the session
-				#is done it will cause a state change from FINISHED 
-				#to INIT; at that point we are clear to quit from GDB.
-				session_done = threading.Event()
-				@self.state.register_callback(self.state.FINISHED, self.state.INIT)
-				def exit_after_sess():
-					session_done.set()
 
-				session_done.wait()
-				gdb.execute("quit")
-				raise Exception("shouldnt get here")
+			if state == self.state.FINISHED:
+				#setup our notification before state transition to
+				#avoid a race condition
+				wait = self.state.register_notify(self.state.FINISHED, None)
+				self.state.transition(state)
+
+				#wait until the session finishes. when the session
+				#is done the state will change from FINISHED 
+				#to INIT only if the session file completes its execution.
+				#otherwise  it will run another session in which case we
+				#will transition to READY
+				wait()
+				#update the local state variable
+				state = self.state.current()
+
+				if self.options.exit and state == self.state.INIT:
+					#if this is a one shot, we want to exit here, as
+					#a transition from FINISHED to INIT signals the
+					#end of execution of the session file
+					gdb.execute("quit")
+					raise Exception("shouldnt get here")
+				elif state == self.state.READY:
+					session_starting = True
+			else:
+				self.state.transition(state)
 
 			if state != self.state.READY:
 				break

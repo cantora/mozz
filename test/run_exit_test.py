@@ -43,12 +43,12 @@ class Test(unittest.TestCase):
 		def finish(host):
 			mozz.debug("cb finish")
 			self.assertEqual(s.iteration(), 2)
-			self.assertEqual(state[0], offset() + 5)
+			self.assertEqual(state[0], offset() + 4)
+			state[0] += 1
 
 		mozz.run_session(s)
 		mozz.debug("session over")
 		self.assertEqual(s.iteration(), 2)
-		self.assertEqual(state[0], offset() + 4)
-		state[0] += 1
+		self.assertEqual(state[0], offset() + 5)
 
 run_test_module(__name__, __file__)

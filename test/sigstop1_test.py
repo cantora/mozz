@@ -1,7 +1,7 @@
 import unittest
 
 import mozz
-import mozz.test
+from mozz.test import run_test_module, abs_path
 import mozz.sig
 
 class Test(unittest.TestCase):
@@ -9,9 +9,7 @@ class Test(unittest.TestCase):
 	#not sure why we get the stop signal twice
 	@unittest.expectedFailure
 	def test_sigstop(self):
-		s = mozz.Session("test_sigstop")
-		
-		s.set_target_rel(__file__, "sigstop1_test.bin")
+		s = mozz.Session(abs_path(__file__, "sigstop1_test.bin"))
 
 		d = {
 			'stop_count': 0
@@ -29,4 +27,4 @@ class Test(unittest.TestCase):
 		self.assertEqual(d['stop_count'], 1)
 
 
-mozz.test.run_test_module(__name__, __file__)
+run_test_module(__name__, __file__)

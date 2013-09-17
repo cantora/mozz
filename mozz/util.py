@@ -2,6 +2,8 @@ import os
 import re
 import threading
 
+import mozz.log
+
 def python_file_basename(fpath):
 	return os.path.basename(python_path_basename(fpath))
 
@@ -91,6 +93,24 @@ class StateMachine(object):
 
 		return False
 
+	def current(self):
+		self.lock.acquire()
+		result = self.state
+		self.lock.release()
+		return result
+
+	def register_notify(self, from_state, to_state):
+		event = threading.Event()
+		@self.register_callback(from_state, to_state)
+		def notify_fn():
+			event.set()
+			
+		def wait():
+			event.wait()
+			self.delete_callback(from_state, to_state, notify_fn)
+
+		return wait
+
 	def register_callback(self, from_state, to_state, *args, **kwargs):
 		def tmp(fn):
 			self.lock.acquire()
@@ -102,16 +122,20 @@ class StateMachine(object):
 			finally:
 				self.lock.release()
 
+			return fn
+
 		return tmp
 	
 	def delete_callback(self, from_state, to_state, fn):
 		self.lock.acquire()
 		try:
 			edge = (from_state, to_state)
-			l = self.cbs.get(edge, [])
+			if not edge in self.cbs:
+				return
+
 			self.cbs[edge] = [
 				(cb_fn, cb_args, cb_kwargs) \
-					for (cb_fn, cb_args, cb_kwargs) in l \
+					for (cb_fn, cb_args, cb_kwargs) in self.cbs.get(edge, []) \
 					if cb_fn != fn
 			]
 		finally:
@@ -137,10 +161,12 @@ class StateMachine(object):
 			if edge[1] == self.INIT:
 				self.n += 1
 
-			for (cb_fn, cb_args, cb_kwargs) in self.cbs.get(edge, []):
-				self.log("transition callback %s -> %s " % edge + \
-							" to %s" % cb_fn.__name__)
-				cb_fn(*cb_args, **cb_kwargs)
+			for x in (edge, (edge[0], None), (None, edge[1])):
+				for (cb_fn, cb_args, cb_kwargs) in self.cbs.get(x, []):
+					self.log("transition callback %s -> %s " % x + \
+								" to %s" % cb_fn.__name__)
+					cb_fn(*cb_args, **cb_kwargs)
+
 		finally:
 			self.lock.release()
 
