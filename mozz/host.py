@@ -24,7 +24,7 @@ class Host(object):
 		self.bps = []
 
 	def log(self, s):
-		raise NotImplementedException("not implemented")
+		mozz.debug(s)
 
 	def has_inferior(self):
 		if not self.inf:

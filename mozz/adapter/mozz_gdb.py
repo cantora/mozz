@@ -109,9 +109,6 @@ class GDBHost(mozz.host.Host):
 	def __init__(self, session):
 		super(GDBHost, self).__init__(session)
 
-	def log(self, s):
-		mozz.debug(s)
-
 	def selected_is_my_inf(self):
 		return gdb.selected_inferior().num == self.inferior().inf_id
 
