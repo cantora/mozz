@@ -6,7 +6,7 @@ from mozz.test import run_test_module, abs_path
 class Test(unittest.TestCase):
 
 	def test_mockup_fake_file(self):
-		s = mozz.Session(abs_path(__file__, "mockup_basic_test.bin"))
+		s = mozz.Session(abs_path(__file__, "mockup_fakefile_test.bin"))
 
 		d = {
 			'got_sig':       False,

@@ -207,7 +207,9 @@ class Session(object):
 	def notify_addr(self, addr, host, *args, **kwargs):
 		mozz.log.debug("notify address %r" % (addr,))
 		handled = False
-		
+		mockup_handled = False
+		skip_handled = False
+
 		for (k, v) in self.find_addrs(self.addr_cbs, addr, host.inferior()):
 			if not callable(v):
 				continue
@@ -219,10 +221,16 @@ class Session(object):
 			if not callable(fn):
 				continue
 	
-			handled = True
+			mockup_handled = True
 			self.do_mockup_callback(host, fn, jmp, options, *args, **kwargs)
 
-		return handled
+		#skips have lower precedence than mockups
+		if not mockup_handled: 
+			for (k, jmp) in self.find_addrs(self.skip_map, addr, host.inferior()):
+				skip_handled = True 
+				self.do_jmp(host, jmp)
+		
+		return handled or mockup_handled or skip_handled
 
 	def do_mockup_callback(self, host, fn, jmp, options, *args, **kwargs):
 		regargs = []
@@ -232,10 +240,12 @@ class Session(object):
 		
 		args = tuple(regargs) + args
 		fn(host, *args, **kwargs)
+		self.do_jmp(host, jmp)
+
+	def do_jmp(self, host, addr):
 		@host.with_inferior()
 		def set_pc(host):
-			host.inferior().reg_set_pc(jmp.value(host.inferior()))
-
+			host.inferior().reg_set_pc(addr.value(host.inferior()))
 		
 	def notify_event_run(self, host):
 		return self.notify_event("run", host)

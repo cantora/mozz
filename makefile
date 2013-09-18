@@ -11,7 +11,10 @@ test/%_test.bin: test/%_test.c
 	gcc -o $@ $<
 
 test/mockup_fakefile_test.bin: test/mockup_basic_test.bin
-	cp $< $@
+	cd test && ln -s $(notdir $<) $(notdir $@)
+
+test/skip_basic_test.bin: test/mockup_basic_test.bin
+	cd test && ln -s $(notdir $<) $(notdir $@)
 
 define test-template
 .PHONY: $(1)
