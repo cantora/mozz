@@ -24,7 +24,7 @@ class Host(object):
 		self.bps = []
 
 	def log(self, s):
-		mozz.debug(s)
+		print(s)
 
 	def has_inferior(self):
 		if not self.inf:
