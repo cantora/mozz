@@ -133,10 +133,9 @@ class CLIAdapter(Adapter):
 		self.state = self.State(mozz.debug)
 
 	def run_session(self, sess):
-		wait = self.state.register_notify(None, self.state.FINISHED)
-		self.state.transition(self.state.SESSION, sess)
-		wait()
-
+		with self.state.a_block_until(None, self.state.FINISHED):
+			self.state.transition(self.state.SESSION, sess)
+	
 		self.state.session().notify_event_finish(self.state.host)
 
 	def import_session_file(self, fpath):
@@ -160,11 +159,10 @@ class CLIAdapter(Adapter):
 		t.start()
 
 	def cmd_run(self, fpath):
-		wait = self.state.register_notify(self.state.EXECUTING, None)
-		self.state.transition(self.state.EXECUTING)
-		self.import_session(fpath)
+		with self.state.a_block_until(self.state.EXECUTING, None):
+			self.state.transition(self.state.EXECUTING)
+			self.import_session(fpath)
 
-		wait()
 		if not self.state.currently(self.state.SESSION): 
 			#session file caused and error
 			self.state.transition(self.state.INIT)
@@ -201,15 +199,14 @@ class CLIAdapter(Adapter):
 			if state == self.state.FINISHED:
 				#setup our notification before state transition to
 				#avoid a race condition
-				wait = self.state.register_notify(self.state.FINISHED, None)
-				self.state.transition(state)
+				with self.state.a_block_until(self.state.FINISHED, None):
+					self.state.transition(state)
+					#wait until the session finishes. when the session
+					#is done the state will change from FINISHED 
+					#to INIT only if the session file completes its execution.
+					#otherwise  it will run another session in which case we
+					#will transition to SESSION
 
-				#wait until the session finishes. when the session
-				#is done the state will change from FINISHED 
-				#to INIT only if the session file completes its execution.
-				#otherwise  it will run another session in which case we
-				#will transition to SESSION
-				wait()
 				#update the local state variable
 				state = self.state.current()
 

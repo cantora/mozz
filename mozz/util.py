@@ -99,17 +99,29 @@ class StateMachine(object):
 		self.lock.release()
 		return result
 
-	def register_notify(self, from_state, to_state):
+	def a_block_until(self, from_state, to_state):
+		'''
+		blocks at end of code sequence until the
+		specified transition occurs
+		'''
 		event = threading.Event()
 		@self.register_callback(from_state, to_state)
 		def notify_fn():
 			event.set()
-			
-		def wait():
-			event.wait()
-			self.delete_callback(from_state, to_state, notify_fn)
 
-		return wait
+		st = self
+		class Wait(object):
+
+			def __enter__(self):
+				pass
+
+			def __exit__(self, ty, val, traceback):
+				if ty is None:
+					event.wait()
+				st.delete_callback(from_state, to_state, notify_fn)
+				return False
+
+		return Wait()
 
 	def register_callback(self, from_state, to_state, *args, **kwargs):
 		def tmp(fn):
