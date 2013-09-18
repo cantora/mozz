@@ -3,13 +3,13 @@
 import mozz
 import mozz.sig
 
-s = mozz.Session("./example-bin", 2)
+s = mozz.Session("./example-bin", 1)
 
 @s.at_entry()
 def at_entry(host):
 	host.log("program entry %d" % host.session.iteration())
 
-@s.at_addr(0x0040071a)
+@s.at_addr("main")
 def at_main(host):
 	host.log("at main %d" % host.session.iteration())
 	host.set_drop_into_cli()
@@ -37,8 +37,8 @@ def on_fpe(host):
 	host.log("got fpe. set stop flag")
 	host.session.set_flag_stop()
 
-@s.on_start()
-def on_start(host):
+@s.on_inferior_pre()
+def on_inferior_pre(host):
 	host.log("start inferior")
 
 @s.on_exit()

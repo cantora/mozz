@@ -3,11 +3,33 @@ from collections import namedtuple
 
 import mozz.err
 from mozz.cb import *
+import mozz.log
 
 class SessionErr(mozz.err.Err):
 	pass
 
-class Addr(namedtuple('AddrBase', 'addr base')):
+class Addr(object):
+	
+	def value(self, inferior):
+		'''
+		convert this address into an integer value, 
+		potentially using the inferior to resolve.
+		'''
+		raise NotImplementedError("not implemented")
+
+class SymbolOffset(namedtuple('SymbolOffsetBase', 'name offset'), Addr):
+	'''
+	represents the numeric value of a symbol + some offset
+	'''
+	def __init__(self, name, offset):
+		if not isinstance(offset, (int, long)):
+			offset = 0
+		super(SymbolOffset, self).__init__(name, offset)
+
+	def value(self, inferior):
+		return inferior.symbol_addr(self.name) + self.offset
+
+class NumericAddr(namedtuple('NumericAddrBase', 'addr base'), Addr):
 	def __init__(self, addr, base):
 		'''
 		a runtime address. @addr should be an 
@@ -22,9 +44,9 @@ class Addr(namedtuple('AddrBase', 'addr base')):
 		if not isinstance(base, str):
 			base = None
 
-		super(Addr, self).__init__(addr, base)
+		super(NumericAddr, self).__init__(addr, base)
 
-	def __int__(self):
+	def value(self, inferior):
 		'''
 		havent implemented self.base functionality yet,
 		so only absolute addresses are supported now
@@ -32,13 +54,19 @@ class Addr(namedtuple('AddrBase', 'addr base')):
 		return self.addr
 
 def addr_from_int(n):
-	return Addr(n, None)
+	return NumericAddr(n, None)
 
-def convert_ints_to_addrs(*args):
+def convert_values_to_addrs(*args):
 	result = []
 	for x in args:
-		if isinstance(x, int):
-			newx = Addr(x, None)
+		if isinstance(x, (int,long)):
+			newx = NumericAddr(x, None)
+		elif isinstance(x, str):
+			newx = SymbolOffset(x, 0)
+		elif isinstance(x, tuple) and len(x) == 2 \
+				and isinstance(x[0], str) \
+				and isinstance(x[1], (int,long)):
+			newx = SymbolOffset(*x)
 		elif isinstance(x, Addr):
 			newx = x
 		else:
@@ -102,12 +130,12 @@ class Session(object):
 		return self.add_event_cb_fn("entry")
 
 	def at_addr(self, addr):
-		(addr,) = convert_ints_to_addrs(addr)
+		(addr,) = convert_values_to_addrs(addr)
 
 		return self.add_addr_cb_fn(addr)
 
 	def mockup(self, addr, jmp):
-		(addr, jmp) = convert_ints_to_addrs(addr, jmp)
+		(addr, jmp) = convert_values_to_addrs(addr, jmp)
 
 		def tmp(fn):
 			self.mockups[addr] = (fn, jmp)
@@ -120,7 +148,7 @@ class Session(object):
 		skip instructions at address [@addr, @end). in otherwords,
 		jump to @end when we arrive at @addr
 		'''
-		(addr, end) = convert_ints_to_addrs(addr, end)
+		(addr, end) = convert_values_to_addrs(addr, end)
 		self.skip_map[addr] = end
 
 	def on_run(self):
@@ -169,21 +197,29 @@ class Session(object):
 		self.event_cbs[name](*args, **kwargs)
 		return True
 
-	def find_addr(self, d, addr):
-		i = int(addr)
+	def find_addrs(self, d, addr, inferior):
+		i = addr.value(inferior)
+		result = []
 		for (k, v) in d.items():
-			if int(k) == i:
-				return (k, v)
+			kval = k.value(inferior)
+			if kval == i:
+				result.append( (k, v) )
 
-		return (None, None)
+		return result
 
-	def notify_addr(self, addr, *args, **kwargs):
-		(k, v) = self.find_addr(self.addr_cbs, addr)
-		if None in (k, v) or not callable(v):
-			return False
+	def notify_addr(self, addr, host, *args, **kwargs):
+		mozz.log.debug("notify address %r" % (addr,))
+		args = (host,) + args
+		handled = False
+		
+		for (k, v) in self.find_addrs(self.addr_cbs, addr, host.inferior()):
+			if not callable(v):
+				continue
+	
+			handled = True
+			v(*args, **kwargs)
 
-		v(*args, **kwargs)
-		return True
+		return handled
 
 	def notify_event_run(self, host):
 		return self.notify_event("run", host)
@@ -226,12 +262,12 @@ class Session(object):
 	def get_flag_finished(self):
 		return self.flag_finished
 
-	def each_break_addr(self):
+	def each_break_addr(self, inferior):
 		for addr in self.addr_cbs.keys():
-			yield int(addr)
+			yield addr.value(inferior)
 
 		for addr in self.mockups.keys():
-			yield int(addr)
+			yield addr.value(inferior)
 
 		for addr in self.skip_map.keys():
-			yield int(addr)
+			yield addr.value(inferior)

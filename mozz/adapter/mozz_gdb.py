@@ -104,6 +104,10 @@ class GDBInf(mozz.host.Inf):
 	def _cont(self):
 		gdb.execute("continue")
 
+	def _symbol_addr(self, name):
+		v = gdb.parse_and_eval("(%s)+0" % name)
+		return long(v)
+
 class GDBHost(mozz.host.Host):
 
 	def __init__(self, session):
@@ -138,7 +142,12 @@ class GDBHost(mozz.host.Host):
 		self.on_exit()
 
 	def set_breakpoint(self, addr):
-		return BrkPoint(self, spec=("*0x%x" % addr), type=gdb.BP_BREAKPOINT, internal=True)
+		if isinstance(addr, (int,long)):
+			s = ("*0x%x" % addr)
+		else:
+			raise TypeError("unexpected address type %r" % addr)
+
+		return BrkPoint(self, spec=s, type=gdb.BP_BREAKPOINT, internal=True)
 
 	def _run_inferior(self, *args, **kwargs):
 		try:

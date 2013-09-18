@@ -21,7 +21,7 @@ class Host(object):
 		self._drop_into_cli = False
 		self.inferior_procs = []
 		self.about_to_start_inferior = False
-		self.bps = []
+		self.bps = {}
 
 	def log(self, s):
 		print(s)
@@ -40,6 +40,8 @@ class Host(object):
 			raise TypeError("expected instance of Inf: %r" % inf)
 
 		self.inf = inf
+		self.clear_breakpoints()
+		self.set_breakpoints()
 
 	def clear_inferior(self):
 		self.clear_breakpoints()
@@ -67,7 +69,6 @@ class Host(object):
 			'stderr':	IOConfig instance
 		'''
 		self.session.clear_flags()
-		self.set_breakpoints()
 		self.about_to_start_inferior = True
 		return self._run_inferior(*args, **kwargs)
 
@@ -101,6 +102,8 @@ class Host(object):
 		return
 
 	def invoke_callback(self, key, *args, **kwargs):
+		#host is always the first argument to callbacks
+		#so it doesnt need to be explicit
 		args = (self,) + args
 
 		if isinstance(key, (int, long)):
@@ -117,23 +120,27 @@ class Host(object):
 		return result
 
 	def set_breakpoints(self):
-		for addr in self.session.each_break_addr():
+
+		for addr in self.session.each_break_addr(self.inferior()):
+			if addr in self.bps:
+				continue
 			bp = self.set_breakpoint(addr)
 			if bp is None:
 				raise Exception("invalid breakpoint %r" % bp)
 
-			self.bps.append(bp)
+			self.bps[addr] = bp
 
 	def clear_breakpoints(self):
-		for bp in self.bps:
+		for (addr, bp) in self.bps.items():
 			bp.delete()
 
-		self.bps = []
+		self.bps = {}
 
 	def set_breakpoint(self, addr):
 		'''
 		returns a breakpoint object. the object should support the
-		interface defined by the Breakpoint class above.
+		interface defined by the Breakpoint class above. addr must be
+		an integer.
 		'''
 		raise NotImplementedError("not implemented")
 
@@ -219,7 +226,7 @@ class Host(object):
 			result = self.invoke_callback(mozz.cb.SIGNAL_DEFAULT, signal)
 
 		return result
-											
+	
 	def on_start(self):
 		if self.ignore_callback():
 			return False
@@ -239,6 +246,9 @@ class Host(object):
 		return self.invoke_callback(mozz.cb.EXIT)
 
 class InfErr(mozz.err.Err):
+	pass
+
+class SymbolNotFound(InfErr):
 	pass
 
 class Inf(object):
@@ -371,3 +381,20 @@ class Inf(object):
 		'''
 		raise NotImplementedError("not implemented")
 
+	def symbol_addr(self, name):
+		'''
+		returns the absolute address of symbol @name.
+		raises SymbolNotFound if @name is not found.
+		'''
+		result = self._symbol_addr(name)
+		if not result:
+			raise SymbolNotFound("symbol %r was not found" % name)
+
+		return result
+
+	def _symbol_addr(self, name):
+		'''
+		returns None if @name is not found, else it returns the
+		absolute runtime address of @name.
+		'''
+		raise NotImplementedError("not implemented")

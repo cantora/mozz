@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
 	printf("example.c: enter\n");
 	printf("\targc = %d\n", argc);
 
-	//raise(SIGSTOP);
+	raise(SIGSTOP);
 
 	for(i = 0; i < argc; i++) {
 		if(i == 2 && argv[2][0] == 'b')
@@ -38,8 +38,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	printf("example.c: exit\n");
-	//x = 1/0;
-	//printf("div by zero %d\n", x);
+	x = 1/0;
+	printf("div by zero %d\n", x);
 
 	return 0;
 }
