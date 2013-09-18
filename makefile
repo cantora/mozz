@@ -10,6 +10,9 @@ example-bin: example-bin.c
 test/%_test.bin: test/%_test.c
 	gcc -o $@ $<
 
+test/mockup_fakefile_test.bin: test/mockup_basic_test.bin
+	cp $< $@
+
 define test-template
 .PHONY: $(1)
 $(1): test/$(1).bin

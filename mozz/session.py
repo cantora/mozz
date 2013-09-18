@@ -134,11 +134,11 @@ class Session(object):
 
 		return self.add_addr_cb_fn(addr)
 
-	def mockup(self, addr, jmp):
+	def mockup(self, addr, jmp, *args, **kwargs):
 		(addr, jmp) = convert_values_to_addrs(addr, jmp)
 
 		def tmp(fn):
-			self.mockups[addr] = (fn, jmp)
+			self.mockups[addr] = (fn, jmp, kwargs)
 			return fn
 
 		return tmp
@@ -206,7 +206,6 @@ class Session(object):
 
 	def notify_addr(self, addr, host, *args, **kwargs):
 		mozz.log.debug("notify address %r" % (addr,))
-		args = (host,) + args
 		handled = False
 		
 		for (k, v) in self.find_addrs(self.addr_cbs, addr, host.inferior()):
@@ -214,20 +213,30 @@ class Session(object):
 				continue
 	
 			handled = True
-			v(*args, **kwargs)
+			v(host, *args, **kwargs)
 
-		for (k, (fn, jmp)) in self.find_addrs(self.mockups, addr, host.inferior()):
+		for (k, (fn, jmp, options)) in self.find_addrs(self.mockups, addr, host.inferior()):
 			if not callable(fn):
 				continue
 	
 			handled = True
-			fn(*args, **kwargs)
-			@host.with_inferior()
-			def set_pc(host):
-				host.inferior().set_reg_pc(jmp.value(host.inferior()))
+			self.do_mockup_callback(host, fn, jmp, options, *args, **kwargs)
 
 		return handled
 
+	def do_mockup_callback(self, host, fn, jmp, options, *args, **kwargs):
+		regargs = []
+		if 'regset' in options:
+			for reg in options['regset']:
+				regargs.append(host.inferior().reg(reg))
+		
+		args = tuple(regargs) + args
+		fn(host, *args, **kwargs)
+		@host.with_inferior()
+		def set_pc(host):
+			host.inferior().reg_set_pc(jmp.value(host.inferior()))
+
+		
 	def notify_event_run(self, host):
 		return self.notify_event("run", host)
 

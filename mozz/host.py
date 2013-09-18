@@ -352,41 +352,50 @@ class Inf(object):
 	def stderr(self):
 		return self._stderr
 
-	def get_reg(self, name):
+	def reg(self, name):
+		'''
+		returns value of @name register
+		'''
 		raise NotImplementedError("not implemented")
 	
 	def reg_pc(self):
 		raise NotImplementedError("not implemented")
 
-	def set_reg(self, name, value):
-		raise NotImplementedError("not implemented")
-
-	def set_reg_pc(self, value):
-		raise NotImplementedError("not implemented")
-
-	def mem_write(self, addr, bytes):
+	def reg_set(self, name, value):
 		'''
-		write @bytes at @addr. @addr should be an integer
-		and @bytes should be a tuple of integers < 256.
+		set @name register to @value.
+		'''
+		raise NotImplementedError("not implemented")
+
+	def reg_set_pc(self, value):
+		raise NotImplementedError("not implemented")
+
+	def mem_write_buf(self, addr, data):
+		'''
+		write @data at @addr. @addr should be an integer
+		and @data should be an object which yields characters.
+		'''
+		raise NotImplementedError("not implemented")
+
+	def mem_write(self, addr, data):
+		'''
+		write @data at @addr. @addr should be an integer
+		and @data should be an object which yields integers 
+		smaller than 256 when iterated.
 		'''
 		raise NotImplementedError("not implemented")
 
 	def mem_read(self, addr, sz):
 		'''
 		read @sz bytes at @addr. @addr and @sz should be 
-		integers. returns a tuple of integers < 256.
+		integers. returns a list of integers < 256.
 		'''
 		raise NotImplementedError("not implemented")
 
-	def reg_write(self, name, val):
+	def mem_read_buf(self, addr, sz):
 		'''
-		set @name register to @val.
-		'''
-		raise NotImplementedError("not implemented")
-
-	def reg_read(self, name):
-		'''
-		returns value of @name register
+		read @sz bytes at @addr. @addr and @sz should be 
+		integers. returns a buffer-like object.
 		'''
 		raise NotImplementedError("not implemented")
 

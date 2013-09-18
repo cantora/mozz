@@ -52,7 +52,7 @@ class Test(unittest.TestCase):
 			d['got_mockup'] += 1
 			@host.with_inferior()
 			def seteax(host):
-				host.inferior().set_reg("eax", ord('p'))
+				host.inferior().reg_set("rax", ord('p'))
 
 		@s.at_addr("try_to_get_here")
 		def goal_fn(host):

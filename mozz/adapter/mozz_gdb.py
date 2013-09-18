@@ -68,11 +68,15 @@ class GDBInf(mozz.host.Inf):
 
 		return pc
 
-	def set_reg(self, name, value):
+	def reg_set(self, name, value):
 		gdb.execute("set $%s = 0x%x" % (name, value), False, True)
 
-	def set_reg_pc(self, value):
-		return self.set_reg("pc", value)
+	def reg_set_pc(self, value):
+		return self.reg_set("pc", value)
+
+	def reg(self, name):
+		v = gdb.parse_and_eval("$%s" % name)
+		return long(v)
 
 	def get_frame(self):
 		try:
@@ -113,6 +117,27 @@ class GDBInf(mozz.host.Inf):
 	def _symbol_addr(self, name):
 		v = gdb.parse_and_eval("(%s)+0" % name)
 		return long(v)
+
+	def mem_write(self, addr, data):
+		bs = "".join([chr(x) for x in data])
+		self.mem_write_buf(bs)
+
+	def mem_write_buf(self, addr, data):
+		self.gdb_inf().write_memory(addr, data)
+
+	def mem_read(self, addr, sz):
+		data = self.gdb_inf().read_memory(addr, sz)
+		if isinstance(data, memoryview):
+			return data.tolist()
+		else:
+			return [ord(x) for x in data]
+
+	def mem_read_buf(self, addr, sz):
+		data = self.gdb_inf().read_memory(addr, sz)
+		if isinstance(data, memoryview):
+			return data.tobytes()
+		else:
+			return data
 
 class GDBHost(mozz.host.Host):
 
