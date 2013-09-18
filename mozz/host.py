@@ -352,7 +352,16 @@ class Inf(object):
 	def stderr(self):
 		return self._stderr
 
+	def get_reg(self, name):
+		raise NotImplementedError("not implemented")
+	
 	def reg_pc(self):
+		raise NotImplementedError("not implemented")
+
+	def set_reg(self, name, value):
+		raise NotImplementedError("not implemented")
+
+	def set_reg_pc(self, value):
 		raise NotImplementedError("not implemented")
 
 	def mem_write(self, addr, bytes):

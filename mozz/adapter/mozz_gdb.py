@@ -68,6 +68,12 @@ class GDBInf(mozz.host.Inf):
 
 		return pc
 
+	def set_reg(self, name, value):
+		gdb.execute("set $%s = 0x%x" % (name, value), False, True)
+
+	def set_reg_pc(self, value):
+		return self.set_reg("pc", value)
+
 	def get_frame(self):
 		try:
 			frame = gdb.selected_frame()
@@ -190,7 +196,7 @@ class GDBAdapter(mozz.adapter.CLIAdapter):
 
 
 	def exit(self):
-		gdb.execute("quit")
+		gdb.execute("quit", False, True)
 
 	def on_stop(self, event):
 		if self.running_or_stopped():

@@ -2,3 +2,4 @@
 *.log
 *.out
 !addr_basic_test.bin
+!mockup_basic_test.bin

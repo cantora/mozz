@@ -199,13 +199,10 @@ class Session(object):
 
 	def find_addrs(self, d, addr, inferior):
 		i = addr.value(inferior)
-		result = []
 		for (k, v) in d.items():
 			kval = k.value(inferior)
 			if kval == i:
-				result.append( (k, v) )
-
-		return result
+				yield (k, v) 
 
 	def notify_addr(self, addr, host, *args, **kwargs):
 		mozz.log.debug("notify address %r" % (addr,))
@@ -218,6 +215,16 @@ class Session(object):
 	
 			handled = True
 			v(*args, **kwargs)
+
+		for (k, (fn, jmp)) in self.find_addrs(self.mockups, addr, host.inferior()):
+			if not callable(fn):
+				continue
+	
+			handled = True
+			fn(*args, **kwargs)
+			@host.with_inferior()
+			def set_pc(host):
+				host.inferior().set_reg_pc(jmp.value(host.inferior()))
 
 		return handled
 
