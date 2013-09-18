@@ -158,7 +158,6 @@ class GDBHost(mozz.host.Host):
 		self.set_inferior(GDBInf(gdb.selected_inferior().num, **kwargs))
 		#runs the inferior until the first stop
 		self.inferior().run(*args)
-		mozz.debug("finished first exec")
 		
 		return self.continue_inferior()
 
