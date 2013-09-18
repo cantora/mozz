@@ -16,6 +16,7 @@ $(1): test/$(1).bin
 	@echo '######################################################################'; done
 	@echo '############# TEST $(1) '
 	@echo '######################################################################'; done
+	@rm -f test/$(1).out test/$(1).log
 	@./cli --exit -vvvv test/$(1).py > test/$(1).log 2>&1
 	@cat test/$(1).out 2>/dev/null || { echo 'test $(1) failed to produce output'; false; }
 	@echo
