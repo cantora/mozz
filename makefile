@@ -1,4 +1,8 @@
-TESTS 		= $(notdir $(patsubst %.py, %, $(wildcard ./test/*_test.py) ) )
+MODULE_TESTS		= $(notdir $(patsubst %.py, %, $(wildcard ./test/mozz.*_test.py) ) )
+SESSION_TESTS		= $(filter-out \
+							$(MODULE_TESTS), \
+							$(notdir $(patsubst %.py, %, $(wildcard ./test/*_test.py) ) ) \
+					  )
 
 .PHONY: example
 example: example-bin
@@ -18,20 +22,36 @@ test/skip_basic_test.bin: test/mockup_basic_test.bin
 
 define test-template
 .PHONY: $(1)
-$(1): test/$(1).bin
+$(1): $(3)
 	@echo '######################################################################'; done
 	@echo '############# TEST $(1) '
 	@echo '######################################################################'; done
 	@rm -f test/$(1).out test/$(1).log
-	@./cli --exit -vvvv test/$(1).py > test/$(1).log 2>&1
+	@$(2) > test/$(1).log 2>&1
 	@cat test/$(1).out 2>/dev/null || { echo 'test $(1) failed to produce output'; false; }
 	@echo
 
 endef
 
-$(foreach test, $(TESTS), $(eval $(call test-template,$(test)) ) )
+define sess-test-template
+$(call test-template,$(1),./cli --exit -vvvv test/$(1).py,test/$(1).bin)
+endef
 
-tests: $(TESTS)
+define mod-test-template
+$(call test-template,$(1),PYTHONPATH='$(CURDIR):$$$$PYTHONPATH' python test/$(1).py)
+endef
+
+$(foreach test, $(SESSION_TESTS), $(eval $(call sess-test-template,$(test)) ) )
+$(foreach test, $(MODULE_TESTS), $(eval $(call mod-test-template,$(test)) ) )
+
+.PHONY: session-tests
+session-tests: $(SESSION_TESTS)
+
+.PHONY: module-tests
+module-tests: $(MODULE_TESTS)
+
+.PHONY: tests
+tests: module-tests session-tests
 
 .PHONY: clean
 clean:
