@@ -57,3 +57,8 @@ def error(str):
 	else:
 		return None
 
+def traceback_error(str):
+	import traceback
+	return error(
+		"%s\n%s" % (str, traceback.format_exc())
+	)

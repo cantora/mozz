@@ -143,7 +143,7 @@ class CLIAdapter(Adapter):
 		try:
 			super(CLIAdapter, self).import_session_file(fpath)
 		except Exception as e:
-			mozz.error("failed to import session %r: %s" % (fpath, e))
+			mozz.traceback_error("failed to import session %r: %s" % (fpath, e))
 
 		#if we never set the state to SESSION, `cmd_run` is still
 		#waiting, so we have to release it

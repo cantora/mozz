@@ -59,22 +59,21 @@ class Host(object):
 			and (not self.inferior().state() == "dead") \
 			and (not self.session.get_flag_stop())
 
-	def run_inferior(self, *args, **kwargs):
+	def run_inferior(self):
+		self.session.clear_flags()
+		self.about_to_start_inferior = True
+		return self._run_inferior(
+			*self.session.target_args,
+			**self.session.target_kwargs
+		)
+
+	def _run_inferior(self, *args, **kwargs):
 		'''
-		runs inferior file with @args and returns
-		when inferior exits.
+		internal method for subclasses to override.
 		valid keyword args:
 			'stdin':	IOConfig instance
 			'stdout':	IOConfig instance
 			'stderr':	IOConfig instance
-		'''
-		self.session.clear_flags()
-		self.about_to_start_inferior = True
-		return self._run_inferior(*args, **kwargs)
-
-	def _run_inferior(self, *args, **kwargs):
-		'''
-		internal method for subclasses to override
 		'''
 		raise NotImplementedError("not implemented")
 
@@ -233,6 +232,7 @@ class Host(object):
 
 		if self.about_to_start_inferior == True:
 			self.about_to_start_inferior = False
+			mozz.debug("invoke inferior pre callback")
 			self.invoke_callback(mozz.cb.INFERIOR_PRE)
 
 		self.inferior().on_start()

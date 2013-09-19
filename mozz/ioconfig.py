@@ -57,7 +57,7 @@ class FifoConfig(IOConfig):
 		)
 	
 	def __init__(self, mode):
-		super(self, FifoConfig).__init__(mode)
+		super(FifoConfig, self).__init__(mode)
 		(self._filename, self._io_object) = self.__class__.make_fifo(mode)
 
 	def filename(self):
@@ -71,7 +71,7 @@ class FifoConfig(IOConfig):
 
 class RedirConfig(IOConfig):
 	def __init__(self, mode, filepath):
-		super(self, RedirConfig).__init__(mode)
+		super(RedirConfig, self).__init__(mode)
 		self._filename = filepath
 
 	def filename(self):

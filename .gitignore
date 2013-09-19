@@ -1,4 +1,4 @@
-example-bin
+example-bin.out
 *.pyc
 core
 scratch

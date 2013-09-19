@@ -12,6 +12,7 @@ class BrkPoint(gdb.Breakpoint, mozz.host.Breakpoint):
 	def __init__(self, host, *args, **kwargs):
 		super(BrkPoint, self).__init__(*args, **kwargs)
 		self.host = host
+		self.silent = True
 
 	def stop(self):
 		mozz.debug("mozz_gdb bp %d: hit_count=%r, visible=%r" % (
@@ -98,7 +99,7 @@ class GDBInf(mozz.host.Inf):
 		cmd = "run "
 
 		if len(args) > 0:
-			cmd += " ".join(args)
+			cmd += " ".join(args) + " "
 
 		if self.stdin().filename():
 			cmd += "< %s " % (self.stdin().filename())
@@ -109,6 +110,7 @@ class GDBInf(mozz.host.Inf):
 		if self.stderr().filename():
 			cmd += "2> %s " % (self.stderr().filename())
 
+		mozz.debug("run inferior with command %r" % cmd)
 		gdb.execute(cmd)
 
 	def _cont(self):

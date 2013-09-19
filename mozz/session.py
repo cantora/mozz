@@ -85,12 +85,34 @@ class Session(object):
 		self.skip_map = {}
 		self.n = 0
 		self.target = target
+		self._target_args = tuple([])
+		self._target_kwargs = {}
+		'''
+		valid keyword args:
+			'stdin':	IOConfig instance
+			'stdout':	IOConfig instance
+			'stderr':	IOConfig instance
+		'''
 		self.flags = {}
 		self.flag_finished = False
 		if limit >= 0:
 			self.limit = limit
 		else:
 			self.limit = 1
+
+	@property
+	def target_args(self):
+		return self._target_args
+
+	@property
+	def target_kwargs(self):
+		return self._target_kwargs
+
+	def set_target_args(self, *args):
+		self._target_args = args
+
+	def set_target_kwargs(self, **kwargs):
+		self._target_kwargs = kwargs
 
 	def iteration(self):
 		return self.n

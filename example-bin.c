@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
 	printf("example.c: enter\n");
 	printf("\targc = %d\n", argc);
 
-	raise(SIGSTOP);
+	raise(SIGKILL);
 
 	for(i = 0; i < argc; i++) {
 		if(i == 2 && argv[2][0] == 'b')
