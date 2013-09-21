@@ -370,6 +370,16 @@ class Inf(object):
 	def reg_set_pc(self, value):
 		raise NotImplementedError("not implemented")
 
+	def mem_write_uint32(self, addr, val):
+		#TODO: fix LE assumption
+		v = (
+			(val & 0x000000ff),
+			(val & 0x0000ff00) >> 8,
+			(val & 0x00ff0000) >> 16,
+			(val & 0xff000000) >> 24,
+		)
+		return self.mem_write(addr, v)
+
 	def mem_write_buf(self, addr, data):
 		'''
 		write @data at @addr. @addr should be an integer
@@ -398,6 +408,15 @@ class Inf(object):
 		integers. returns a buffer-like object.
 		'''
 		raise NotImplementedError("not implemented")
+
+	def mem_read_uint32(self, addr):
+		#TODO: dont assume LE
+		data = self.mem_read(addr, 4)
+		return \
+			data[0] + \
+			(data[1] << 8) + \
+			(data[2] << 16) + \
+			(data[3] << 24) 
 
 	def symbol_addr(self, name):
 		'''
