@@ -127,8 +127,12 @@ class Session(object):
 	def add_event_cb_fn(self, name):
 		return self.add_cb_fn(self.event_cbs, name)
 
-	def add_addr_cb_fn(self, addr):
-		return self.add_cb_fn(self.addr_cbs, addr)
+	def add_addr_cb_fn(self, addr, *args, **kwargs):
+		def tmp(fn):
+			self.addr_cbs[addr] = (fn, args, kwargs)
+			return fn
+
+		return tmp
 
 	def on_inferior_pre(self):
 		'''
@@ -151,10 +155,10 @@ class Session(object):
 		'''
 		return self.add_event_cb_fn("entry")
 
-	def at_addr(self, addr):
+	def at_addr(self, addr, *args, **kwargs):
 		(addr,) = convert_values_to_addrs(addr)
 
-		return self.add_addr_cb_fn(addr)
+		return self.add_addr_cb_fn(addr, *args, **kwargs)
 
 	def mockup(self, addr, jmp, *args, **kwargs):
 		(addr, jmp) = convert_values_to_addrs(addr, jmp)
@@ -165,13 +169,13 @@ class Session(object):
 
 		return tmp
 
-	def skip(self, addr, end):
+	def skip(self, addr, end, *args, **kwargs):
 		'''
 		skip instructions at address [@addr, @end). in otherwords,
 		jump to @end when we arrive at @addr
 		'''
 		(addr, end) = convert_values_to_addrs(addr, end)
-		self.skip_map[addr] = end
+		self.skip_map[addr] = (end, args, kwargs)
 
 	def on_run(self):
 		'''
@@ -232,12 +236,13 @@ class Session(object):
 		mockup_handled = False
 		skip_handled = False
 
-		for (k, v) in self.find_addrs(self.addr_cbs, addr, host.inferior()):
-			if not callable(v):
+		for (k, (fn, _, options)) in self.find_addrs(self.addr_cbs, addr, host.inferior()):
+			if not callable(fn):
 				continue
 	
+			regargs = self.make_regset_args(host, **options)
 			handled = True
-			v(host, *args, **kwargs)
+			fn(host, *(regargs + args), **kwargs)
 
 		for (k, (fn, jmp, options)) in self.find_addrs(self.mockups, addr, host.inferior()):
 			if not callable(fn):
@@ -248,27 +253,38 @@ class Session(object):
 
 		#skips have lower precedence than mockups
 		if not mockup_handled: 
-			for (k, jmp) in self.find_addrs(self.skip_map, addr, host.inferior()):
+			for (k, (jmp, _, options)) in self.find_addrs(self.skip_map, addr, host.inferior()):
 				skip_handled = True 
-				self.do_jmp(host, jmp)
+				self.do_jmp(host, jmp, **options)
 		
 		return handled or mockup_handled or skip_handled
 
-	def do_mockup_callback(self, host, fn, jmp, options, *args, **kwargs):
+	def make_regset_args(self, host, **kwargs):
 		regargs = []
-		if 'regset' in options:
-			for reg in options['regset']:
+		if 'regset' in kwargs:
+			for reg in kwargs['regset']:
 				regargs.append(host.inferior().reg(reg))
-		
-		args = tuple(regargs) + args
-		fn(host, *args, **kwargs)
-		self.do_jmp(host, jmp)
 
-	def do_jmp(self, host, addr):
+		return tuple(regargs)
+
+	def do_mockup_callback(self, host, fn, jmp, options, *args, **kwargs):
+		regargs = self.make_regset_args(host, **options)
+		
+		args = regargs + args
+		fn(host, *args, **kwargs)
+		self.do_jmp(host, jmp, **options)
+
+	def do_jmp(self, host, addr, **kwargs):
 		@host.with_inferior()
 		def set_pc(host):
+			self.do_regstate(host, addr, **kwargs)
 			host.inferior().reg_set_pc(addr.value(host.inferior()))
-		
+	
+	def do_regstate(self, host, addr, **kwargs):
+		if 'regstate' in kwargs:
+			for (reg, val) in kwargs['regstate'].items():
+				host.inferior().reg_set(reg, val)
+
 	def notify_event_run(self, host):
 		return self.notify_event("run", host)
 
