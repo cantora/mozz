@@ -28,3 +28,8 @@ def byte_buf(amt):
 	return "".join([
 		chr(b) for b in n_bytes(amt)
 	])
+
+def intrange_buf(amt, a, b):
+	return "".join([
+		chr(x) for x in n_intranges(amt, a, b)
+	])
