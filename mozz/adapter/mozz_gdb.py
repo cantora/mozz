@@ -21,11 +21,14 @@ class BrkPoint(gdb.Breakpoint, mozz.host.Breakpoint):
 		))
 
 		self.host.on_break()
+		if self.host.need_to_flush_inferior_procs():
+			gdb.post_event(lambda: self.host.flush_inferior_procs())
+			return True
+
 		if self.host.drop_into_cli():
 			return True
 
-		if self.host.need_to_flush_inferior_procs():
-			gdb.post_event(lambda: self.host.flush_inferior_procs())
+		if not self.host.should_continue():
 			return True
 
 		return False
@@ -122,7 +125,7 @@ class GDBInf(mozz.host.Inf):
 
 	def mem_write(self, addr, data):
 		bs = "".join([chr(x) for x in data])
-		self.mem_write_buf(bs)
+		self.mem_write_buf(addr, bs)
 
 	def mem_write_buf(self, addr, data):
 		self.gdb_inf().write_memory(addr, data)
@@ -139,7 +142,7 @@ class GDBInf(mozz.host.Inf):
 		if isinstance(data, memoryview):
 			return data.tobytes()
 		else:
-			return data
+			return bytes(data)
 
 class GDBHost(mozz.host.Host):
 
