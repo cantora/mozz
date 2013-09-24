@@ -34,6 +34,8 @@ class BrkPoint(gdb.Breakpoint, mozz.host.Breakpoint):
 		return False
 
 
+def gdb_int_exec(cmd):
+	return gdb.execute(cmd, False, True)
 	
 class GDBInf(mozz.host.Inf):
 
@@ -42,7 +44,7 @@ class GDBInf(mozz.host.Inf):
 		self.inf_id = inf_id
 
 	def kill(self):
-		gdb.execute("kill inferiors %d" % self.inf_id)
+		gdb_int_exec("kill inferiors %d" % self.inf_id)
 
 	def state(self):
 		inf = self.gdb_inf()
@@ -73,7 +75,7 @@ class GDBInf(mozz.host.Inf):
 		return pc
 
 	def reg_set(self, name, value):
-		gdb.execute("set $%s = 0x%x" % (name, value), False, True)
+		gdb_int_exec("set $%s = 0x%x" % (name, value))
 
 	def reg_set_pc(self, value):
 		return self.reg_set("pc", value)
@@ -187,7 +189,7 @@ class GDBHost(mozz.host.Host):
 
 	def _run_inferior(self, *args, **kwargs):
 		try:
-			gdb.execute("file %s" % self.session.target)
+			gdb_int_exec("file %s" % self.session.target)
 		except gdb.error as e:
 			raise mozz.host.HostErr("session target error: %s" % e)
 
@@ -214,8 +216,8 @@ class GDBAdapter(mozz.adapter.CLIAdapter):
 		super(GDBAdapter, self).__init__(options)
 		mozz.log.set_default_logger(verbosity=options.verbose)
 
-		gdb.execute("set python print-stack full")
-		gdb.execute("set pagination off")
+		gdb_int_exec("set python print-stack full")
+		gdb_int_exec("set pagination off")
 		
 		self.init_cmds()
 		
@@ -226,7 +228,7 @@ class GDBAdapter(mozz.adapter.CLIAdapter):
 
 
 	def exit(self):
-		gdb.execute("quit", False, True)
+		gdb_int_exec("quit")
 
 	def on_stop(self, event):
 		if self.running_or_stopped():
