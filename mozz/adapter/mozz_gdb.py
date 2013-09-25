@@ -3,10 +3,27 @@ import os
 import threading
 import traceback
 import re
+import threading
+import logging
+import sys
 
 import mozz.host
 import mozz.adapter
 import mozz.log
+
+#this is pretty hacky, but its the only solution ive found
+#for the following problem: sometimes we want to silence
+#output from gdb commands to the console, so we call
+#gdb.execute(..., False, True), but this will also silence
+#all of our mozz.log.*, and host.log(...) output, which is
+#bad. under the hood, gdb simply replaces sys.stdout with
+#their own I/O object (which doesnt support the .fileno method),
+#so we can circumvent it by opening stdout directly from the
+#file descriptor.
+real_stdout = os.fdopen(1, 'w')
+
+def gdb_log(msg):
+	return real_stdout.write(msg+"\n")
 
 class BrkPoint(gdb.Breakpoint, mozz.host.Breakpoint):
 
@@ -16,26 +33,30 @@ class BrkPoint(gdb.Breakpoint, mozz.host.Breakpoint):
 		self.silent = True
 
 	def stop(self):
-		mozz.debug("mozz_gdb bp %d: hit_count=%r, visible=%r" % (
-			self.number, self.hit_count, self.visible
-			
-		))
-
-		self.host.on_break()
-		if self.host.need_to_flush_inferior_procs():
-			gdb.post_event(lambda: self.host.flush_inferior_procs())
-			return True
-
-		if self.host.drop_into_cli():
-			return True
-
-		if not self.host.should_continue():
-			return True
+		try:
+			mozz.debug("mozz_gdb bp %d: hit_count=%r, visible=%r" % (
+				self.number, self.hit_count, self.visible
+			))
+	
+			self.host.on_break()
+			if self.host.need_to_flush_inferior_procs():
+				gdb.post_event(lambda: self.host.flush_inferior_procs())
+				return True
+	
+			if self.host.drop_into_cli() \
+					or not self.host.should_continue() \
+					or self.host.inferior().is_in_step_mode():
+				return True
+		except Exception as e:
+			gdb_log("exception during breakpoint processing: %s\n%s" % (e, traceback.format_exc()))
 
 		return False
 
-
 def gdb_int_exec(cmd):
+	'''
+	need to defer all printing and catch all exceptions during this
+	functions execution, and then print and re-raise.
+	'''	
 	return gdb.execute(cmd, False, True)
 	
 class GDBInf(mozz.host.Inf):
@@ -55,16 +76,11 @@ class GDBInf(mozz.host.Inf):
 	def kill(self):
 		gdb_int_exec("kill inferiors %d" % self.inf_id)
 
-	def state(self):
+	def is_alive(self):
 		inf = self.gdb_inf()
-		result = 'dead'
 		if inf.pid != 0:
-			if self.running():
-				result = 'running'
-			else:
-				result = 'stopped'
-
-		return result
+			return True
+		return False
 
 	def gdb_inf(self):
 		for inf in gdb.inferiors():
@@ -78,10 +94,7 @@ class GDBInf(mozz.host.Inf):
 		))
 
 	def reg_pc(self):
-		frame = self.get_frame()
-		pc = frame.pc()
-
-		return pc
+		return self.reg("pc")
 
 	def reg_set(self, name, value):
 		gdb_int_exec("set $%s = 0x%x" % (name, value))
@@ -93,6 +106,8 @@ class GDBInf(mozz.host.Inf):
 		v = gdb.parse_and_eval("$%s" % name)
 		return long(v)
 
+	'''
+	not needed, but might be useful later
 	def get_frame(self):
 		try:
 			frame = gdb.selected_frame()
@@ -108,6 +123,7 @@ class GDBInf(mozz.host.Inf):
 			raise Exception("expected valid frame")
 		#if frame.type() != gdb.NORMAL_FRAME:
 		#	raise Exception("expected frame.type == NORMAL_FRAME. got: %s" % frame.type())
+	'''
 
 	def _run(self, *args):
 		cmd = "run "
@@ -125,10 +141,19 @@ class GDBInf(mozz.host.Inf):
 			cmd += "2> %s " % (self.stderr().filename())
 
 		mozz.debug("run inferior with command %r" % cmd)
-		gdb.execute(cmd)
+		gdb_int_exec(cmd)
 
 	def _cont(self):
-		gdb.execute("continue")
+		#print "cont: \n%s" % 
+		gdb_int_exec("continue")
+
+	def _step_into(self):
+		#print "si: \n%s" % 
+		gdb_int_exec("si")
+
+	def _step_over(self):
+		#print "so: \n%s" % 
+		gdb_int_exec("ni")
 
 	def _symbol_addr(self, name):
 		v = gdb.parse_and_eval("(%s)+0" % name)
@@ -160,6 +185,9 @@ class GDBHost(mozz.host.Host):
 	def __init__(self, session):
 		super(GDBHost, self).__init__(session)
 
+	def log(self, msg):
+		gdb_log(msg)
+
 	def selected_is_my_inf(self):
 		return gdb.selected_inferior().num == self.inferior().inf_id
 
@@ -173,10 +201,6 @@ class GDBHost(mozz.host.Host):
 		if isinstance(event, gdb.SignalEvent):
 			#gdb seems to use the same names as python std lib for signals
 			self.on_stop(event.stop_signal)
-
-		elif isinstance(event, gdb.BreakpointEvent):
-			self.on_break_and_stop()
-
 
 	def gdb_cont(self, event):
 		#mozz.debug("cont event: %r" % event)
@@ -215,6 +239,18 @@ class Cmd(gdb.Command):
 		self.name = "mozz-"+name
 		super (Cmd, self).__init__(self.name, type)
 
+class GDBLogHandler(logging.Handler):
+
+	def flush(self):
+		pass
+
+	def emit(self, record):
+		try:
+			msg = self.format(record)
+			gdb_log(msg)
+		except:
+			self.handleError(record)
+
 class GDBAdapter(mozz.adapter.CLIAdapter):
 
 	class State(mozz.adapter.CLIAdapter.State):
@@ -223,7 +259,8 @@ class GDBAdapter(mozz.adapter.CLIAdapter):
 
 	def __init__(self, options):
 		super(GDBAdapter, self).__init__(options)
-		mozz.log.set_default_logger(verbosity=options.verbose)
+		
+		mozz.log.set_default_logger(verbosity=options.verbose, handler=GDBLogHandler())
 
 		gdb_int_exec("set python print-stack full")
 		gdb_int_exec("set pagination off")
@@ -239,17 +276,23 @@ class GDBAdapter(mozz.adapter.CLIAdapter):
 	def exit(self):
 		gdb_int_exec("quit")
 
+	def exit_if_exception(self, fn):
+		try:
+			fn()
+		except Exception as e:
+			self.err_exit("error during callback", e)
+
 	def on_stop(self, event):
 		if self.running_or_stopped():
-			self.state.host.gdb_stop(event)
+			self.exit_if_exception(lambda: self.state.host.gdb_stop(event))
 	
 	def on_cont(self, event):
 		if self.running_or_stopped():
-			self.state.host.gdb_cont(event)
+			self.exit_if_exception(lambda: self.state.host.gdb_cont(event))
 	
 	def on_exit(self, event):
 		if self.running_or_stopped():
-			self.state.host.gdb_exit(event)
+			self.exit_if_exception(lambda: self.state.host.gdb_exit(event))
 	
 	def run(self):
 		if self.options.session:

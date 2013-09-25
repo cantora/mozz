@@ -155,6 +155,15 @@ class Session(object):
 		'''
 		return self.add_event_cb_fn(mozz.cb.ENTRY)
 
+	def on_step(self):
+		'''
+		invoke the decorated function each time the inferior
+		stops in step mode. this will only be called once per
+		instruction per stop, i.e. once every time the inferior
+		steps.
+		'''
+		return self.add_event_cb_fn(mozz.cb.STEP)
+
 	def at_addr(self, addr, *args, **kwargs):
 		(addr,) = convert_values_to_addrs(addr)
 
@@ -231,7 +240,7 @@ class Session(object):
 				yield (k, v) 
 
 	def notify_addr(self, addr, host, *args, **kwargs):
-		mozz.log.debug("notify address %r" % (addr,))
+		#mozz.log.debug("notify address %r" % (addr,))
 		handled = False
 		mockup_handled = False
 		skip_handled = False

@@ -5,6 +5,7 @@ SIGNAL_UNKNOWN = "signal_unknown"
 
 START = "start"
 ENTRY = "entry"
+STEP = "step"
 EXIT = "exit"
 
 #just after the inferior object is created

@@ -56,7 +56,7 @@ class Host(object):
 
 	def should_continue(self):
 		return self.has_inferior() \
-			and (not self.inferior().state() == "dead") \
+			and self.inferior().is_alive() \
 			and (not self.session.get_flag_stop())
 
 	def run_inferior(self):
@@ -94,8 +94,17 @@ class Host(object):
 			if self.drop_into_cli():
 				self.clear_drop_into_cli()
 				return 
-			mozz.debug("host: continue")
-			self.inferior().cont()
+			mozz.debug("host: advance")
+			pc = self.inferior().reg_pc()
+			self.inferior().advance()
+			mozz.debug("host: done with advance")
+			if self.inferior().is_in_step_mode() \
+					and self.inferior().is_alive():
+				#self.on_break()
+				if pc != self.inferior().reg_pc():
+					#pc might not change if a segfault happened
+					#or something like that.
+					self.invoke_callback(mozz.cb.STEP)
 
 		self.clear_inferior()
 		return
@@ -191,14 +200,6 @@ class Host(object):
 		return len(self.inferior_procs) > 0
 
 	def on_break(self):
-		'''
-		only invokes callbacks to session for address at pc,
-		doesnt notify the inferior of a break, because we 
-		dont necessarily consider a 'break' to be a 'stop';
-		rather, a 'break' may cause a 'stop', in which case
-		the `on_break_and_stop` callback should be invoked
-		following this callback
-		'''
 		if self.ignore_callback():
 			return False
 		
@@ -207,50 +208,37 @@ class Host(object):
 
 		return self.invoke_callback(self.inferior().reg_pc())
 
-	def on_break_and_stop(self):
-		'''
-		this doesnt invoke callbacks to the session as it
-		assumes that the session was already notified via
-		a call to `on_break`. this only notifies the inferior
-		that it has stopped because of a break.
-		'''
-		if self.ignore_callback():
-			return False
-
-		self.inferior().on_break()
-
 	def on_stop(self, signal):
 		if self.ignore_callback():
 			return False
 
-		self.inferior().on_stop(signal)
-
+		mozz.debug("host: on_stop")
 		if not signal in mozz.sig.signals():
 			signal = mozz.cb.SIGNAL_UNKNOWN
 
 		result = self.invoke_callback(signal)
 		if not result:
 			result = self.invoke_callback(mozz.cb.SIGNAL_DEFAULT, signal)
-
+	
 		return result
 	
 	def on_start(self):
 		if self.ignore_callback():
 			return False
 
+		mozz.debug("host: on_start")
 		if self.about_to_start_inferior == True:
 			self.about_to_start_inferior = False
 			mozz.debug("invoke inferior pre callback")
 			self.invoke_callback(mozz.cb.INFERIOR_PRE)
 
-		self.inferior().on_start()
 		return self.invoke_callback(mozz.cb.START)
 
 	def on_exit(self):
 		if self.ignore_callback():
 			return False
 
-		self.inferior().on_exit()
+		mozz.debug("host: on_exit")
 		return self.invoke_callback(mozz.cb.EXIT)
 
 class InfErr(mozz.err.Err):
@@ -267,18 +255,12 @@ class Inf(object):
 		'stderr': 'r'
 	}
 
-	STATES = (
-		'running', 			#inferior is running (not stopped)
-		'stopped',			#inferior is stopped
-		'dead'				#inferior process is dead or hasnt been created yet
-	)
-
 	@property
 	def io_names(self):
 		return self.__class__.IO_NAMES
 
 	def __init__(self, **kwargs):
-		self._running = False
+		self.step_mode = False
 
 		for (name, mode) in self.io_names.items():
 			int_name = "_"+name
@@ -289,6 +271,36 @@ class Inf(object):
 				setattr(self, int_name, kwargs[name])
 			else:
 				setattr(self, int_name, DefaultIOConfig(mode))
+
+	def is_alive(self):
+		'''
+		returns True if this inferior is a live process, else returns
+		False.
+		'''
+		raise NotImplementedError("not implemented")
+
+	def is_in_step_mode(self):
+		return self.step_mode != False
+
+	def is_in_step_into_mode(self):
+		return self.step_mode == 'into'
+
+	def is_in_step_over_mode(self):
+		return self.step_mode == 'over'
+
+	def enter_step_over_mode(self):
+		return self.enter_step_mode('over')
+
+	def enter_step_into_mode(self):
+		return self.enter_step_mode('into')
+
+	def enter_step_mode(self, step_type='over'):
+		mozz.debug("enter step mode: %s" % step_type)
+		self.step_mode = step_type
+
+	def exit_step_mode(self):
+		mozz.debug("exit step mode")
+		self.step_mode = False
 
 	@property
 	def entry_point(self):
@@ -308,9 +320,6 @@ class Inf(object):
 		'''
 		run this inferior until the first stop
 		'''
-		if self.state() != "dead":
-			raise InfErr("tried to run a non-dead inferior")
-
 		return self._run(*args)
 
 	def _run(self, *args):
@@ -318,14 +327,24 @@ class Inf(object):
 		internal (for subclasses): run this inferior until the first stop
 		'''
 		raise NotImplementedError("not implemented")
+
+	def advance(self):
+		'''
+		continue or step, depending on which mode the
+		inferior is currently in.
+		'''
+		if self.step_mode == 'over':
+			return self.step_over()
+		elif self.step_mode == 'into':
+			return self.step_into()
+		else:
+			return self.cont()
 		
 	def cont(self):
 		'''
 		cause a stopped inferior to continue
 		'''
-		if self.state() != "stopped":
-			raise InfErr("tried to continue a non-stopped inferior")
-
+		mozz.debug("inf: cont")
 		return self._cont()
 
 	def _cont(self):
@@ -334,8 +353,29 @@ class Inf(object):
 		'''
 		raise NotImplementedError("not implemented")
 
+	def step_over(self):
+		'''
+		step one instruction forward without not descending into calls
+		'''
+		#mozz.debug("inf: step_over")
+		return self._step_over()
+
+	def _step_over(self):
+		raise NotImplementedError("not implemented")
+
+	def step_into(self):
+		'''
+		step one instruction forward without not descending into calls
+		'''
+		#mozz.debug("inf: step_into")
+		raise Exception("Asdfasdf")
+		return self._step_into()
+
+	def _step_into(self):
+		raise NotImplementedError("not implemented")
+
 	def cleanup(self):
-		if self.state() != "dead":
+		if self.is_alive():
 			self.kill()
 
 		for name in self.io_names.keys():
@@ -343,27 +383,6 @@ class Inf(object):
 
 	def kill(self):
 		raise NotImplementedError("not implemented")
-
-	def running(self):
-		return self._running
-
-	def state(self):
-		'''
-		returns one of the STATES in the tuple above
-		'''
-		raise NotImplementedError("not implemented")
-
-	def on_break(self):
-		self._running = False
-
-	def on_stop(self, signal):
-		self._running = False
-											
-	def on_start(self):
-		self._running = True
-
-	def on_exit(self):
-		self._running = False
 
 	def stdin(self):
 		return self._stdin

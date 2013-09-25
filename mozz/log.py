@@ -3,7 +3,7 @@ import sys
 
 log_obj = None
 
-def set_default_logger(verbosity=0, stream=None):
+def set_default_logger(verbosity=0, handler=logging.StreamHandler(sys.stderr)):
 	lgr = logging.getLogger("mozz")
 	if verbosity >= 2:
 		lgr.setLevel(logging.DEBUG)
@@ -11,12 +11,9 @@ def set_default_logger(verbosity=0, stream=None):
 		lgr.setLevel(logging.INFO)
 	else:
 		lgr.setLevel(logging.ERROR)
-	
-	if not stream:
-		stream = sys.stderr
-	ch = logging.StreamHandler(stream)
-	ch.setLevel(lgr.level)
-	lgr.addHandler(ch)
+
+	handler.setLevel(lgr.level)
+	lgr.addHandler(handler)
 	set_logger(lgr)
 
 def set_logger(logger):
