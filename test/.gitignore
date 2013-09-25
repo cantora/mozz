@@ -3,3 +3,4 @@
 *.out
 !addr_basic_test.bin
 !mockup_basic_test.bin
+!run_exit_test.bin

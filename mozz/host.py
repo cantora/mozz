@@ -119,16 +119,21 @@ class Host(object):
 		return result
 
 	def set_breakpoints(self):
-
-		for addr in self.session.each_break_addr(self.inferior()):
-			if addr in self.bps:
-				continue
+		def add_bp(addr):
 			bp = self.set_breakpoint(addr)
 			if bp is None:
 				raise Exception("invalid breakpoint %r" % bp)
 
 			self.bps[addr] = bp
 
+		for addr in self.session.each_break_addr(self.inferior()):
+			if addr in self.bps:
+				continue
+
+			add_bp(addr)
+
+		add_bp(self.inferior().entry_point)
+		
 	def clear_breakpoints(self):
 		for (addr, bp) in self.bps.items():
 			bp.delete()
@@ -197,6 +202,9 @@ class Host(object):
 		if self.ignore_callback():
 			return False
 		
+		if self.inferior().reg_pc() == self.inferior().entry_point:
+			self.invoke_callback(mozz.cb.ENTRY)
+
 		return self.invoke_callback(self.inferior().reg_pc())
 
 	def on_break_and_stop(self):
@@ -282,6 +290,20 @@ class Inf(object):
 			else:
 				setattr(self, int_name, DefaultIOConfig(mode))
 
+	@property
+	def entry_point(self):
+		if not getattr(self, 'entry_addr', False):
+			self.entry_addr = self._entry_point()
+
+		return self.entry_addr
+
+	def _entry_point(self):
+		'''
+		return an integer representing the address of 
+		the program entry point.
+		'''
+		raise NotImplementedError("not implemented")
+	
 	def run(self, *args):
 		'''
 		run this inferior until the first stop

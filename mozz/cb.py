@@ -4,6 +4,7 @@ SIGNAL_DEFAULT = "signal_default"
 SIGNAL_UNKNOWN = "signal_unknown"
 
 START = "start"
+ENTRY = "entry"
 EXIT = "exit"
 
 #just after the inferior object is created

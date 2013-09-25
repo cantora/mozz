@@ -2,6 +2,7 @@ import gdb
 import os
 import threading
 import traceback
+import re
 
 import mozz.host
 import mozz.adapter
@@ -42,6 +43,14 @@ class GDBInf(mozz.host.Inf):
 	def __init__(self, inf_id, **kwargs):
 		super(GDBInf, self).__init__(**kwargs)
 		self.inf_id = inf_id
+
+	def _entry_point(self):
+		s = gdb_int_exec("info files")
+		m = re.search(r'Entry point: 0x([a-fA-F0-9]+)', s)
+		if not m:
+			raise Mozz.InfErr("failed to find entry point of inferior")
+
+		return int(m.group(1), 16)
 
 	def kill(self):
 		gdb_int_exec("kill inferiors %d" % self.inf_id)

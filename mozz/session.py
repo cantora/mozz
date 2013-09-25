@@ -153,7 +153,7 @@ class Session(object):
 		invoke the decorated function at the execution of
 		the entry point
 		'''
-		return self.add_event_cb_fn("entry")
+		return self.add_event_cb_fn(mozz.cb.ENTRY)
 
 	def at_addr(self, addr, *args, **kwargs):
 		(addr,) = convert_values_to_addrs(addr)
