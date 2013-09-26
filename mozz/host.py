@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 import mozz.err
 from mozz.ioconfig import *
 import mozz.sig
@@ -240,6 +242,31 @@ class Host(object):
 		#mozz.debug("host: on_exit")
 		return self.invoke_callback(mozz.cb.EXIT)
 
+class Instruction(namedtuple('InstructionBase', 'str_val addr data')):
+
+	def __init__(self, str_val, addr, data):
+		'''
+		@str_val: the string representation of the instruction
+		@addr: the address from where the instruction was disassembled
+		@data: a tuple of bytes representing the binary form of the instruction
+		'''
+
+		if not isinstance(str_val, str):
+			raise TypeError("invalid str_val: %r" % str_val)
+		if not isinstance(addr, int):
+			raise TypeError("invalid addr: %r" % addr)
+		if not isinstance(data, tuple) \
+				or len([x for x in data if not isinstance(x, int)]) > 0:
+			raise TypeError("invalid data: %r" % data)
+
+		super(Instruction, self).__init__(str_val, addr, data)
+
+	def __str__(self):
+		return self.str_val
+
+	def __int__(self):
+		return self.addr
+	
 class InfErr(mozz.err.Err):
 	pass
 
@@ -474,3 +501,30 @@ class Inf(object):
 		absolute runtime address of @name.
 		'''
 		raise NotImplementedError("not implemented")
+
+	def disassemble(self, addr, amt=1):
+		'''
+		disassemble @amt instructions at addr.
+		yields Instruction instances.
+		'''
+		raise NotImplementedError("not implemented")
+
+	def current_instruction(self):
+		for i in self.disassemble(self.reg_pc(), 1):
+			return i
+
+		raise InfErr("could not disassemble one instruction at pc")
+
+	def registers(self):
+		'''
+		returns a set of register names.
+		'''
+		raise NotImplementedError("not implemented")
+
+	def register_values(self):
+		'''
+		yields tuples of (register name, register value)
+		in no particular order
+		'''
+		for name in self.registers():
+			yield (name, self.reg(name))

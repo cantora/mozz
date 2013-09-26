@@ -183,6 +183,25 @@ class GDBInf(mozz.host.Inf):
 		else:
 			return bytes(data)
 
+	def registers(self):
+		s = gdb_int_exec("info reg")
+		reg = r'([^\s]+)\s'
+		result = set([])
+
+		for line in s.split('\n'):
+			m = re.match(reg, line)
+			if not m:
+				raise InfErr("could not parse reg name from line %r" % line)
+
+			result.add(m[1])
+
+		return result
+
+	def disassemble(self, addr, amt=1):
+		for i in gdb.Architecture.disassemble(start_pc=addr, count=amt):
+			data = self.mem_read(i['addr'], i['length'])
+			yield mozz.host.Instruction(i['asm'], i['addr'], data)
+
 class GDBHost(mozz.host.Host):
 
 	def __init__(self, session):
