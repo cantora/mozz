@@ -23,7 +23,8 @@ import mozz.log
 real_stdout = os.fdopen(1, 'w')
 
 def gdb_log(msg):
-	return real_stdout.write(msg+"\n")
+	real_stdout.write(msg+"\n")
+	real_stdout.flush()
 
 class BrkPoint(gdb.Breakpoint, mozz.host.Breakpoint):
 

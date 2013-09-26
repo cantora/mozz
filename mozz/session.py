@@ -117,43 +117,84 @@ class Session(object):
 	def iteration(self):
 		return self.n
 
-	def add_cb_fn(self, d, k):
+	def add_event_cb_fn(self, name):
 		def tmp(fn):
-			d[k] = fn
+			if name not in self.event_cbs:
+				self.event_cbs[name] = []
+			self.event_cbs[name].append(fn)
 			return fn
 
 		return tmp
 
-	def add_event_cb_fn(self, name):
-		return self.add_cb_fn(self.event_cbs, name)
+	def remove_event_cb_fn(self, name, fn):
+		if name not in self.event_cbs:
+			return False
+
+		if fn not in self.event_cbs[name]:
+			return False
+
+		self.event_cbs[name] = [
+			x for x in self.event_cbs[name] if x != fn
+		]
+		return True
 
 	def add_addr_cb_fn(self, addr, *args, **kwargs):
 		def tmp(fn):
-			self.addr_cbs[addr] = (fn, args, kwargs)
+			if addr not in self.addr_cbs:
+				self.addr_cbs[addr] = []
+			self.addr_cbs[addr].append((fn, args, kwargs))
 			return fn
 
 		return tmp
+
+	def del_addr_cb_fn(self, addr, fn):
+		(addr,) = convert_values_to_addrs(addr)
+		if addr not in self.addr_cbs:
+			return False
+
+		found = False
+		new_list = []
+		for (func, args, kwargs) in self.addr_cbs[addr]:
+			if fn == func:
+				found = True
+			else:
+				new_list.append((func, args, kwargs))
+
+		if found:
+			self.addr_cbs[addr] = new_list
+			return True
+		else:
+			return False
 
 	def on_inferior_pre(self):
 		'''
 		called just after inferior object is created
 		and before it is run
 		'''
-		return self.add_event_cb_fn(mozz.cb.INFERIOR_PRE)
+		return self.add_event_cb_fn(INFERIOR_PRE)
+
+	def del_cb_inferior_pre(self, fn):
+		return self.remove_event_cb_fn(INFERIOR_PRE, fn)
 
 	def on_inferior_post(self):
 		'''
 		called just after inferior finishes and just
 		before it the inferior object is destroyed
 		'''
-		return self.add_event_cb_fn(mozz.cb.INFERIOR_POST)
+		return self.add_event_cb_fn(INFERIOR_POST)
+
+	def del_cb_inferior_post(self, fn):
+		return self.remove_event_cb_fn(INFERIOR_POST, fn)
 
 	def at_entry(self):
 		'''
 		invoke the decorated function at the execution of
 		the entry point
 		'''
-		return self.add_event_cb_fn(mozz.cb.ENTRY)
+		return self.add_event_cb_fn(ENTRY)
+
+	def del_cb_entry(self, fn):
+		return self.remove_event_cb_fn(ENTRY, fn)
 
 	def on_step(self):
 		'''
@@ -162,7 +203,10 @@ class Session(object):
 		instruction per stop, i.e. once every time the inferior
 		steps.
 		'''
-		return self.add_event_cb_fn(mozz.cb.STEP)
+		return self.add_event_cb_fn(STEP)
+
+	def del_cb_step(self, fn):
+		return self.remove_event_cb_fn(STEP, fn)
 
 	def at_addr(self, addr, *args, **kwargs):
 		(addr,) = convert_values_to_addrs(addr)
@@ -191,53 +235,80 @@ class Session(object):
 		invoke this callback when the host is ready to
 		run the session.
 		'''
-		return self.add_event_cb_fn("run")
+		return self.add_event_cb_fn(RUN)
+
+	def del_cb_run(self, fn):
+		return self.remove_event_cb_fn(RUN, fn)
 
 	def on_finish(self):
 		'''
 		invoke this callback when the session is finished
 		and about to be destroyed.
 		'''
-		return self.add_event_cb_fn("finish")
+		return self.add_event_cb_fn(FINISH)
+
+	def del_cb_finish(self, fn):
+		return self.remove_event_cb_fn(FINISH, fn)
 
 	def on_signal_default(self):
 		return self.add_event_cb_fn(SIGNAL_DEFAULT)
 
+	def del_cb_signal_default(self, fn):
+		return self.remove_event_cb_fn(SIGNAL_DEFAULT, fn)
+
 	def on_signal(self, sig):
 		return self.add_event_cb_fn(sig)
+
+	def del_cb_signal(self, sig, fn):
+		return self.remove_event_cb_fn(sig, fn)
 
 	def on_signal_unknown(self):
 		return self.add_event_cb_fn(SIGNAL_UNKNOWN)
 
+	def del_cb_signal_unknown(self, fn):
+		return self.remove_event_cb_fn(SIGNAL_UNKNOWN, fn)
+
 	def on_start(self):
 		return self.add_event_cb_fn(START)
 
+	def del_cb_start(self, fn):
+		return self.remove_event_cb_fn(START, fn)
+	
 	def on_exit(self):
 		return self.add_event_cb_fn(EXIT)
 
+	def del_cb_exit(self, fn):
+		return self.remove_event_cb_fn(EXIT, fn)
+
 	def process_event(self, name, *args, **kwargs):
-		if name == mozz.cb.INFERIOR_PRE:
+		if name == INFERIOR_PRE:
 			self.n += 1
-		elif name == mozz.cb.INFERIOR_POST:
+		elif name == INFERIOR_POST:
 			if self.limit > 0 and self.n >= self.limit:
 				self.set_flag_finished()
 		
 	def notify_event(self, name, *args, **kwargs):
 		self.process_event(name, *args, **kwargs)
+		handled = False
 
 		if not name in self.event_cbs \
-				or not callable(self.event_cbs[name]):
+				or len(self.event_cbs[name]) < 1:
 			return False
 
-		self.event_cbs[name](*args, **kwargs)
-		return True
+		for fn in self.event_cbs[name]:
+			if not callable(fn):
+				continue
+			fn(*args, **kwargs)
+			handled = True
+
+		return handled
 
 	def find_addrs(self, d, addr, inferior):
 		i = addr.value(inferior)
 		for (k, v) in d.items():
 			kval = k.value(inferior)
 			if kval == i:
-				yield (k, v) 
+				yield (k, v)
 
 	def notify_addr(self, addr, host, *args, **kwargs):
 		#mozz.log.debug("notify address %r" % (addr,))
@@ -245,13 +316,14 @@ class Session(object):
 		mockup_handled = False
 		skip_handled = False
 
-		for (k, (fn, _, options)) in self.find_addrs(self.addr_cbs, addr, host.inferior()):
-			if not callable(fn):
-				continue
-	
-			regargs = self.make_regset_args(host, **options)
-			handled = True
-			fn(host, *(regargs + args), **kwargs)
+		for (k, ls) in self.find_addrs(self.addr_cbs, addr, host.inferior()):
+			for (fn, _, options) in ls:
+				if not callable(fn):
+					continue
+		
+				regargs = self.make_regset_args(host, **options)
+				handled = True
+				fn(host, *(regargs + args), **kwargs)
 
 		for (k, (fn, jmp, options)) in self.find_addrs(self.mockups, addr, host.inferior()):
 			if not callable(fn):
@@ -295,10 +367,10 @@ class Session(object):
 				host.inferior().reg_set(reg, val)
 
 	def notify_event_run(self, host):
-		return self.notify_event("run", host)
+		return self.notify_event(RUN, host)
 
 	def notify_event_finish(self, host):
-		return self.notify_event("finish", host)
+		return self.notify_event(FINISH, host)
 
 	def clear_flags(self):
 		self.flags = {}

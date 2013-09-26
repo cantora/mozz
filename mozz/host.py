@@ -229,7 +229,6 @@ class Host(object):
 		#mozz.debug("host: on_start")
 		if self.about_to_start_inferior == True:
 			self.about_to_start_inferior = False
-			mozz.debug("invoke inferior pre callback")
 			self.invoke_callback(mozz.cb.INFERIOR_PRE)
 
 		return self.invoke_callback(mozz.cb.START)

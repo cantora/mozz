@@ -20,6 +20,9 @@ test/mockup_fakefile_test.bin: test/mockup_basic_test.bin
 test/skip_basic_test.bin: test/mockup_basic_test.bin
 	cd test && ln -s $(notdir $<) $(notdir $@)
 
+test/cb_remove_test.bin: test/signal1_test.bin
+	cd test && ln -s $(notdir $<) $(notdir $@)
+
 define test-template
 .PHONY: $(1)
 $(1): $(3)

@@ -4,9 +4,11 @@ SIGNAL_DEFAULT = "signal_default"
 SIGNAL_UNKNOWN = "signal_unknown"
 
 START = "start"
+RUN = "run"
 ENTRY = "entry"
 STEP = "step"
 EXIT = "exit"
+FINISH = "finish"
 
 #just after the inferior object is created
 INFERIOR_PRE = "inferior_pre" 
