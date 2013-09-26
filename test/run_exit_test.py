@@ -19,7 +19,7 @@ class Test(unittest.TestCase):
 			state[0] += 1
 
 		def offset():
-			return (s.iteration()-1)*3
+			return (s.iteration()-1)*4
 
 		@s.on_inferior_pre()
 		def inf_pre(host):

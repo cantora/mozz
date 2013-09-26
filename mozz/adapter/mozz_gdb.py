@@ -49,6 +49,8 @@ class BrkPoint(gdb.Breakpoint, mozz.host.Breakpoint):
 				return True
 		except Exception as e:
 			gdb_log("exception during breakpoint processing: %s\n%s" % (e, traceback.format_exc()))
+			self.host.set_drop_into_cli()
+			return True
 
 		return False
 
@@ -259,7 +261,7 @@ class GDBAdapter(mozz.adapter.CLIAdapter):
 
 	def __init__(self, options):
 		super(GDBAdapter, self).__init__(options)
-		
+		self.exiting = False		
 		mozz.log.set_default_logger(verbosity=options.verbose, handler=GDBLogHandler())
 
 		gdb_int_exec("set python print-stack full")
@@ -272,7 +274,6 @@ class GDBAdapter(mozz.adapter.CLIAdapter):
 		#gdb.events.new_objfile.connect(self.on_objfile)
 		gdb.events.exited.connect(self.on_exit)
 
-
 	def exit(self):
 		gdb_int_exec("quit")
 
@@ -283,15 +284,15 @@ class GDBAdapter(mozz.adapter.CLIAdapter):
 			self.err_exit("error during callback", e)
 
 	def on_stop(self, event):
-		if self.running_or_stopped():
+		if self.running_or_stopped() and not self.exiting:
 			self.exit_if_exception(lambda: self.state.host.gdb_stop(event))
 	
 	def on_cont(self, event):
-		if self.running_or_stopped():
+		if self.running_or_stopped() and not self.exiting:
 			self.exit_if_exception(lambda: self.state.host.gdb_cont(event))
 	
 	def on_exit(self, event):
-		if self.running_or_stopped():
+		if self.running_or_stopped() and not self.exiting:
 			self.exit_if_exception(lambda: self.state.host.gdb_exit(event))
 	
 	def run(self):
@@ -299,7 +300,8 @@ class GDBAdapter(mozz.adapter.CLIAdapter):
 			gdb.execute("mozz-run %s" % self.options.session)
 	
 	def err_exit(self, s, e):
-		print("%s: %s\n%s" % (s, e, traceback.format_exc()))
+		self.exiting = True
+		gdb_log("%s: %s\n%s" % (s, e, traceback.format_exc()))
 		self.exit()
 
 	def init_cmds(self):

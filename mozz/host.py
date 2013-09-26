@@ -94,10 +94,10 @@ class Host(object):
 			if self.drop_into_cli():
 				self.clear_drop_into_cli()
 				return 
-			mozz.debug("host: advance")
+			#mozz.debug("host: advance")
 			pc = self.inferior().reg_pc()
 			self.inferior().advance()
-			mozz.debug("host: done with advance")
+			#mozz.debug("host: done with advance")
 			if self.inferior().is_in_step_mode() \
 					and self.inferior().is_alive():
 				#self.on_break()
@@ -212,7 +212,7 @@ class Host(object):
 		if self.ignore_callback():
 			return False
 
-		mozz.debug("host: on_stop")
+		#mozz.debug("host: on_stop")
 		if not signal in mozz.sig.signals():
 			signal = mozz.cb.SIGNAL_UNKNOWN
 
@@ -226,7 +226,7 @@ class Host(object):
 		if self.ignore_callback():
 			return False
 
-		mozz.debug("host: on_start")
+		#mozz.debug("host: on_start")
 		if self.about_to_start_inferior == True:
 			self.about_to_start_inferior = False
 			mozz.debug("invoke inferior pre callback")
@@ -238,7 +238,7 @@ class Host(object):
 		if self.ignore_callback():
 			return False
 
-		mozz.debug("host: on_exit")
+		#mozz.debug("host: on_exit")
 		return self.invoke_callback(mozz.cb.EXIT)
 
 class InfErr(mozz.err.Err):
@@ -368,7 +368,6 @@ class Inf(object):
 		step one instruction forward without not descending into calls
 		'''
 		#mozz.debug("inf: step_into")
-		raise Exception("Asdfasdf")
 		return self._step_into()
 
 	def _step_into(self):
