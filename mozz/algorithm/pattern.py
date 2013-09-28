@@ -3,15 +3,6 @@ import logging
 
 import mozz.log
 
-verbosity = 2
-log = logging.getLogger("mozz.pattern")
-if verbosity >= 2:
-	log.setLevel(logging.DEBUG)
-elif verbosity == 1:
-	log.setLevel(logging.INFO)
-else:
-	log.setLevel(logging.ERROR)
-
 class PatternLogHandler(logging.Handler):
 
 	def flush(self):
@@ -45,13 +36,30 @@ class Depth(object):
 		return Tmp()
 
 depth = Depth()
+
+verbosity = 2
+log = logging.getLogger("pattern")
+
+if verbosity >= 2:
+	log.setLevel(logging.DEBUG)
+elif verbosity == 1:
+	log.setLevel(logging.INFO)
+else:
+	log.setLevel(logging.ERROR)
+
 handler = PatternLogHandler()
 handler.setLevel(log.level)
 log.addHandler(handler)
 
-class SeqRecord(namedtuple('SeqRecordBase', 'id')):
+class SeqRecord(namedtuple('SeqRecord', 'id')):
 	def __init__(self, id):
 		super(SeqRecord, self).__init__(id)
+
+	def __str__(self):
+		return str(self.id)
+
+	def __repr__(self):
+		return repr(self.id)
 
 	def __hash__(self):
 		return hash(self.id)
@@ -65,7 +73,10 @@ class SeqRecord(namedtuple('SeqRecordBase', 'id')):
 	def records(self):
 		yield self
 
-class RecursiveSeq(namedtuple('RecursiveSeqBase', 'cycles seq')):
+	def actual_len(self):
+		return 1
+
+class RecursiveSeq(namedtuple('RecursiveSeq', 'cycles seq')):
 	def __init__(self, cycles, seq):
 		if not isinstance(seq, tuple):
 			raise TypeError("seq must be a tuple")
@@ -74,19 +85,23 @@ class RecursiveSeq(namedtuple('RecursiveSeqBase', 'cycles seq')):
 			raise ValueError("cannot create empty recursive sequence")
 
 		for a in seq:
-			if not isinstance(Record) and not isinstance(RecordTuple):
-				raise TypeError("each arg must be a Record or RecordTuple")
+			if not isinstance(self, RecursiveSeq) \
+					and not isinstance(self,SeqRecord):
+				raise TypeError("each arg must be a RecursiveSeq or SeqRecord")
 
 		if cycles < 1:
 			raise ValueError("cycles must be >= 1. got %d" % cycles)
 
-		super(RecordTuple, self).__init__(cycles, seq)
+		super(RecursiveSeq, self).__init__(cycles, seq)
+
+	def __repr__(self):
+		return "%r*%d" % (self.seq, self.cycles)
 
 	def __eq__(self, other):
 		if not isinstance(other, self.__class__):
 			return False
 
-		return self == other
+		return self.seq == other.seq and self.cycles == other.cycles
 
 	@property
 	def id(self):
@@ -111,6 +126,9 @@ class Pattern(list):
 		self._itrs = 0
 		self._offset = 0
 		self._cycles = cycles
+
+	def __repr__(self):
+		return "%s*%d" % (super(Pattern, self).__repr__(), self._cycles)
 
 	@staticmethod
 	def from_recursive_seq(rs):
@@ -144,8 +162,11 @@ class Pattern(list):
 			self._offset = 0
 			self.inc_iterations()
 
+	def el_at_offset(self, offset):
+		return self[offset % len(self)]
+
 	def expected(self):
-		return self[self._offset % len(self)]
+		return self.el_at_offset(self._offset)
 
 	def flattened(self):
 		l = []
@@ -156,7 +177,11 @@ class Pattern(list):
 		return l
 
 	def actual_len(self):
-		return len(self.flattened())*self._cycles*(self.iterations+1)
+		sum = 0
+		for i in range(self.offset):
+			sum += self.el_at_offset(i).actual_len()
+		
+		return self.iterations*self.cycles*len(self) + sum
 
 class Foo(object):
 	'''
@@ -180,8 +205,10 @@ class Foo(object):
 			log.debug("reduce: no pattern to reduce")
 			return
 
-		if self.pattern.iterations() > 0:
-			log.debug("reduce: reduce pattern with %d iterations" % self.pattern.iterations())
+		if self.pattern.iterations >= 2 \
+				or (self.pattern.iterations == 1 and \
+					self.pattern.cycles > 1):
+			log.debug("reduce: reduce pattern with %d iterations" % self.pattern.iterations)
 
 			#this pattern found some repetitions
 			if self.pattern.offset != 0:
@@ -199,78 +226,99 @@ class Foo(object):
 				#restore the stack
 				log.debug("reduce: restore %d items from the stack" % len(tmp))
 				self.stack.extend(tmp)
+			return True
 		else:
 			#we only come to reduce if the newest record
 			#doesnt match the current pattern, nor any
 			#sub-sequences of the current pattern, so
 			#this pattern cant possibly work out
-			log.debug("reduce: current pattern didnt find any repetitions, so just trash it")
+			log.debug("reduce: current pattern didnt find any repetitions")
+			log.debug("-->trashing %r" % self.pattern)
 			self.pattern_stack.pop()
+			return False
 
 	def check_subpatterns(self, new_rec, pattern, parents=[]):
 		if isinstance(pattern.expected(), SeqRecord):
-			log.debug("check subpatterns: return False")
+			log.debug("check subpatterns: expected is a SeqRecord")
 			return False
 
+		log.debug("check subpatterns: of pattern %r, expected=%r" % (
+			pattern, pattern.expected())
+		)
 		p = Pattern.from_recursive_seq(pattern.expected())
-		log.debug("check subpatterns: %r" % p)
+		log.debug("check subpatterns: subpattern=%r" % p)
 		if p.expected() == new_rec:
+			log.debug("->subpattern matched.")
 			for parent in parents:
-				self.pattern_stack.push(parent)
-			self.pattern_stack.push(p)
+				log.debug("->push subpattern %r" % (parent))
+				self.pattern_stack.append(parent)
+			log.debug("->push subpattern %r" % (p))
+			self.pattern_stack.append(p)
 			self.pattern.inc_offset()
-			log.debug("->subpattern matched. pushed %d patterns" % len(parents)+1)
 			return True
 		
 		with depth.plus_one():
 			return self.check_subpatterns(new_rec, p, parents+[pattern])
 		
 	def check_pattern(self, new_rec):
-		log.debug("check pattern: %r" % new_rec)
+		log.debug("check pattern: new_rec=%r" % (new_rec,))
 
-		if self.known.get(new_rec, 0) < 1:
-			log.debug("check pattern: new record is unknown")
-			#this will get incremented when new_rec is pushed onto the stack
-			self.known[new_rec] = 0 
-			with depth.plus_one():
-				self.reduce()
-		elif self.pattern:
+		if not self.is_known(new_rec):
+			log.debug("check pattern: %r is unknown" % (new_rec,))
+
+		if self.pattern:
 			if self.pattern.expected() == new_rec:
 				log.debug("got expected. inc offset")
 				self.pattern.inc_offset()
 			else:
-				log.debug("check pattern: not expected. check subpatterns")
+				log.debug("check pattern: not expected, expected %r" % (self.pattern.expected(),) )
 				if not self.check_subpatterns(new_rec, self.pattern):
 					log.debug("check pattern: no subpatterns matched. reduce")
 					with depth.plus_one():
-						self.reduce()
+						if self.reduce():
+							with depth.plus_one():
+								self.check_pattern(new_rec)
 		else:
-			log.debug("check pattern: new record not new, but no current pattern")
+			log.debug("check pattern: no current pattern")
 		
 	def reduce_pattern(self):
-		log("reduce_pattern: enter")
 		plen = len(self.pattern)
-		recs = []
+		actual_len = self.pattern.actual_len()
 		attr_list = []
+		log.debug("reduce_pattern: %d sequence, %d iters, total=%d" % (
+			plen, self.pattern.iterations, actual_len
+		))
 		
-		assert(plen > 1)
-		for i in range(plen):
+		assert(plen > 0)
+		assert(actual_len >= plen*2)
+		for i in range(actual_len):
 			(rec, attrs)  = self.stack.pop()
-			self.known[rec] -= 1
+			self.sub_from_known(rec)
 			assert(self.known[rec] >= 0)
-			recs.insert(0, rec)
 			for attr in attrs:
 				attr_list.insert(0, attr)
 
-		assert(len(recs) == plen)
-		assert(len(attr_list) == self.pattern.actual_len())
-		new_rec = RecursiveSeq(self.pattern.iterations+1, tuple(recs))
+		log.debug("reduce pattern: attr_list=%r" % attr_list)
+		assert(len(attr_list) == actual_len)
+		new_rec = RecursiveSeq(
+			self.pattern.cycles*self.pattern.iterations,
+			tuple(self.pattern)
+		)
 		log.debug("reduce pattern: created new record from stack")
 		self.pattern_stack.pop()
 
 		self.check_pattern(new_rec)
 		self.stack.append( (new_rec, attrs) )
-		self.known[new_rec] += 1
+		self.add_to_known(new_rec)
+
+	def is_known(self, rec):
+		return self.known.get(rec, 0) > 0
+
+	def add_to_known(self, rec):
+		self.known[rec] = self.known.get(rec, 0) + 1
+
+	def sub_from_known(self, rec):
+		self.known[rec] = self.known.get(rec, 0) - 1
 
 	def append(self, id, rec_attrs):
 		'''
@@ -280,12 +328,12 @@ class Foo(object):
 		(attributes that are specific to this location/instance of the
 		data class represented by @id in the pattern).
 		'''
-		log.debug("append: enter")
-		new_rec = self.SeqRecord(id)
+		log.debug("append: %r" % id)
+		new_rec = SeqRecord(id)
 
 		self.check_pattern(new_rec)
 			
-		if not self.pattern and self.known[new_rec] > 0:
+		if not self.pattern and self.is_known(new_rec):
 			log.debug("append: no current pattern, search for pattern starting with %r" % new_rec)
 			#if we dont currently have any patterns we should find a new
 			#pattern where we are.
@@ -299,6 +347,7 @@ class Foo(object):
 			else:
 				raise Exception("%r in known set, but not found in stack!" % new_rec)
 
+			p.inc_iterations()
 			log.debug("append: found pattern %r" % p)
 			self.pattern_stack.append(p)
 			#this current record counts as the first record
@@ -306,5 +355,7 @@ class Foo(object):
 			#right away.
 			self.pattern.inc_offset()
 
-		self.stack.append( (new_rec, rec_attrs) )
-		self.known[new_rec] += 1
+		self.stack.append( (new_rec, [rec_attrs]) )
+		self.add_to_known(new_rec)
+		log.debug("append: current stack=%r" % [x for (x,y) in self.stack])
+		log.debug("append: current pattern stack=%r" % self.pattern_stack)
