@@ -70,24 +70,23 @@ class SeqRecord(namedtuple('SeqRecord', 'id')):
 
 		return (self.id == other.id)
 
-	def records(self):
-		yield self
+	def ids(self):
+		yield self.id
 
 	def actual_len(self):
 		return 1
 
 class RecursiveSeq(namedtuple('RecursiveSeq', 'cycles seq')):
 	def __init__(self, cycles, seq):
-		if not isinstance(seq, tuple):
-			raise TypeError("seq must be a tuple")
-
-		if len(seq) < 1:
-			raise ValueError("cannot create empty recursive sequence")
-
+		l = 0
 		for a in seq:
-			if not isinstance(self, RecursiveSeq) \
-					and not isinstance(self,SeqRecord):
-				raise TypeError("each arg must be a RecursiveSeq or SeqRecord")
+			l += 1
+			if not isinstance(a, RecursiveSeq) \
+					and not isinstance(a ,SeqRecord):
+				raise TypeError("each arg must be a RecursiveSeq or SeqRecord, got %r" % (seq,))
+
+		if l < 1:
+			raise ValueError("cannot create empty recursive sequence")
 
 		if cycles < 1:
 			raise ValueError("cycles must be >= 1. got %d" % cycles)
@@ -96,6 +95,20 @@ class RecursiveSeq(namedtuple('RecursiveSeq', 'cycles seq')):
 
 	def __repr__(self):
 		return "%r*%d" % (self.seq, self.cycles)
+
+	def print_tree(self, depth=0):
+		ws = " "*depth
+		s = ["%s(\n" % ws]
+		for x in self.seq:
+			pt = getattr(x, 'print_tree', False)
+			if pt:
+				s.append(pt(depth+1))
+			else:
+				s.append(ws + " ")
+				s.append(repr(x) + "\n")
+
+		s.append("%s)*%d\n" % (ws, self.cycles))
+		return "".join(s)
 
 	def __eq__(self, other):
 		if not isinstance(other, self.__class__):
@@ -107,15 +120,16 @@ class RecursiveSeq(namedtuple('RecursiveSeq', 'cycles seq')):
 	def id(self):
 		return self.seq[0].id
 
-	def records(self):
+	def ids(self):
 		with depth.plus_one():
-			for x in self.seq:
-				for record in x.records():
-					yield record
+			for i in range(self.cycles):
+				for x in self.seq:
+					for id in x.ids():
+						yield id
 
 	def actual_len(self):
 		l = 0
-		for r in self.records():
+		for r in self.ids():
 			l += 1
 
 		return l*self.cycles
@@ -168,22 +182,10 @@ class Pattern(list):
 	def expected(self):
 		return self.el_at_offset(self._offset)
 
-	def flattened(self):
-		l = []
-		for x in self:
-			for record in x.records():
-				l.append(record)
-
-		return l
-
 	def actual_len(self):
-		sum = 0
-		for i in range(self.offset):
-			sum += self.el_at_offset(i).actual_len()
-		
-		return self.iterations*self.cycles*len(self) + sum
+		return self.iterations*self.cycles*len(self) + self.offset
 
-class Foo(object):
+class Matcher(object):
 	'''
 	a sequence of items and/or segments.
 	'''
@@ -320,7 +322,7 @@ class Foo(object):
 	def sub_from_known(self, rec):
 		self.known[rec] = self.known.get(rec, 0) - 1
 
-	def append(self, id, rec_attrs):
+	def add(self, id, rec_attrs):
 		'''
 		@id is a hashable identifier for a data class; i.e. the
 		pattern matching alphabet is the set of all data classes.
@@ -359,3 +361,7 @@ class Foo(object):
 		self.add_to_known(new_rec)
 		log.debug("append: current stack=%r" % [x for (x,y) in self.stack])
 		log.debug("append: current pattern stack=%r" % self.pattern_stack)
+
+	def finish(self):
+		self.reduce()
+		return self.stack
