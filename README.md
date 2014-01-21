@@ -53,7 +53,7 @@ def on_exit(host):
 #the host.set_drop_into_cli method sets a flag
 #that if the mozz backend has a CLI, it
 #should be provided at this point for manual
-#investigation. see the ## architecture
+#investigation. see the ## backends
 #section below for info on mozz backends
 @s.on_signal(mozz.sig.SIGSEGV)
 def on_seg(host):
@@ -179,7 +179,7 @@ def quit(host):
 mozz.run_session(s)
 ```
 
-## architecture
+## backends
 mozz defers the task of managing and controlling an inferior
 process to a debugger adapter/backend. The adapter must provide
 implementations of the `mozz.host.Host` and the `mozz.host.Inf`
