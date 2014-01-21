@@ -94,6 +94,11 @@ def convert_values_to_addrs(*args):
 class Session(object):
 
 	def __init__(self, target, limit=1):
+		'''
+		@target: the target binary path
+		@limit: the maximum number of times to
+                run the session before stopping.
+		'''
 		self.event_cbs = {}
 		self.addr_cbs = {}
 		self.mockups = {}
