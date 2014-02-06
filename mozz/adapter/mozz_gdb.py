@@ -114,11 +114,17 @@ class GDBInf(mozz.host.Inf):
 	def reg_pc(self):
 		return self.reg("pc")
 
+	def reg_sp(self):
+		return self.reg("sp")
+
 	def reg_set(self, name, value):
 		gdb_int_exec("set $%s = 0x%x" % (name, value))
 
 	def reg_set_pc(self, value):
 		return self.reg_set("pc", value)
+
+	def reg_set_sp(self, value):
+		return self.reg_set("sp", value)
 
 	def reg(self, name):
 		v = gdb.parse_and_eval("$%s" % name)

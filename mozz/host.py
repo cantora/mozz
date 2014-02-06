@@ -396,7 +396,7 @@ class Inf(object):
 
 	def step_over(self):
 		'''
-		step one instruction forward without not descending into calls
+		step one instruction forward without descending into calls
 		'''
 		#mozz.debug("inf: step_over")
 		return self._step_over()
@@ -406,7 +406,7 @@ class Inf(object):
 
 	def step_into(self):
 		'''
-		step one instruction forward without not descending into calls
+		step one instruction forward, descending into calls
 		'''
 		#mozz.debug("inf: step_into")
 		return self._step_into()
@@ -439,6 +439,9 @@ class Inf(object):
 		'''
 		raise NotImplementedError("not implemented")
 	
+	def reg_sp(self):
+		raise NotImplementedError("not implemented")
+
 	def reg_pc(self):
 		raise NotImplementedError("not implemented")
 
@@ -449,6 +452,9 @@ class Inf(object):
 		raise NotImplementedError("not implemented")
 
 	def reg_set_pc(self, value):
+		raise NotImplementedError("not implemented")
+
+	def reg_set_sp(self, value):
 		raise NotImplementedError("not implemented")
 
 	def mem_write_uint32(self, addr, val):
