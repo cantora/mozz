@@ -19,6 +19,18 @@ import threading
 
 import mozz.log
 
+def size_to_struct_fmt(sz):
+	if sz == 8:
+		return 'b'
+	elif sz == 16:
+		return 'h'
+	elif sz == 32:
+		return 'i'
+	elif sz == 64:
+		return 'q'
+
+	return None
+
 def python_file_basename(fpath):
 	return os.path.basename(python_path_basename(fpath))
 

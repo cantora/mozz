@@ -19,8 +19,15 @@ from collections import namedtuple
 import mozz.err
 from mozz.cb import *
 import mozz.log
+import mozz.abi.endian
 
 class SessionErr(mozz.err.Err):
+	pass
+
+class FunctionContext(object):
+	'''
+	placeholder. still needs to be implemented
+	'''
 	pass
 
 class Addr(object):
@@ -102,11 +109,16 @@ class Session(object):
 		self.event_cbs = {}
 		self.addr_cbs = {}
 		self.mockups = {}
+		self.function_cbs = {}
 		self.skip_map = {}
+		self.break_counts = {}
 		self.n = 0
+		self.set_little_endian()
+		self._stack_grows_down = True
 		self.target = target
 		self._target_args = tuple([])
 		self._target_kwargs = {}
+		self.calling_convention = None
 		'''
 		valid keyword args:
 			'stdin':	IOConfig instance
@@ -119,6 +131,24 @@ class Session(object):
 			self.limit = limit
 		else:
 			self.limit = 1
+
+	def set_calling_convention(self, cc):
+		self.calling_convention = cc
+
+	def set_little_endian(self):
+		self._endian = mozz.abi.endian.Little
+
+	def set_big_endian(self):
+		self._endian = mozz.abi.endian.Big
+
+	def set_stack_grows_up(self):
+		self._stack_grows_down = False
+
+	def endian(self):
+		return self._endian
+
+	def stack_grows_down(self):
+		return self._stack_grows_down
 
 	@property
 	def target_args(self):
@@ -228,6 +258,14 @@ class Session(object):
 	def del_cb_step(self, fn):
 		return self.remove_event_cb_fn(STEP, fn)
 
+	def at_function(self, addr, *args, **kwargs):
+		(addr,) = convert_values_to_addrs(addr)
+		def tmp(fn):
+			self.function_cbs[addr] = (fn, args, kwargs)
+			return fn
+
+		return tmp
+
 	def at_addr(self, addr, *args, **kwargs):
 		(addr,) = convert_values_to_addrs(addr)
 
@@ -330,13 +368,25 @@ class Session(object):
 			if kval == i:
 				yield (k, v)
 
+	def inc_break_count(self, addr):
+		if not addr in self.break_counts:
+			self.break_counts[addr] = 1
+		else:
+			self.break_counts[addr] += 1
+
+	def break_count(self, addr):
+		if not addr in self.break_counts:
+			return 0
+		else:
+			return self.break_counts[addr]
+
 	def notify_addr(self, addr, host, *args, **kwargs):
 		#mozz.log.debug("notify address %r" % (addr,))
 		handled = False
 		mockup_handled = False
 		skip_handled = False
 
-		for (k, ls) in self.find_addrs(self.addr_cbs, addr, host.inferior()):
+		for (_, ls) in self.find_addrs(self.addr_cbs, addr, host.inferior()):
 			for (fn, _, options) in ls:
 				if not callable(fn):
 					continue
@@ -345,7 +395,13 @@ class Session(object):
 				handled = True
 				fn(host, *(regargs + args), **kwargs)
 
-		for (k, (fn, jmp, options)) in self.find_addrs(self.mockups, addr, host.inferior()):
+		for (_, (fn, proto_args, options)) in self.find_addrs(self.function_cbs, addr, host.inferior()):
+			if not callable(fn):
+				continue
+
+			self.do_function_callback(host, addr, fn, proto_args, options, *args, **kwargs)
+
+		for (_, (fn, jmp, options)) in self.find_addrs(self.mockups, addr, host.inferior()):
 			if not callable(fn):
 				continue
 	
@@ -354,9 +410,11 @@ class Session(object):
 
 		#skips have lower precedence than mockups
 		if not mockup_handled: 
-			for (k, (jmp, _, options)) in self.find_addrs(self.skip_map, addr, host.inferior()):
+			for (_, (jmp, _, options)) in self.find_addrs(self.skip_map, addr, host.inferior()):
 				skip_handled = True 
 				self.do_jmp(host, jmp, **options)
+
+		self.inc_break_count(addr)
 		
 		return handled or mockup_handled or skip_handled
 
@@ -374,6 +432,21 @@ class Session(object):
 		args = regargs + args
 		fn(host, *args, **kwargs)
 		self.do_jmp(host, jmp, **options)
+
+	def do_function_callback(self, host, addr, fn, proto_args, options, *args, **kwargs):
+		if not self.calling_convention:
+			raise Exception("a calling convention must " + \
+							"be set to use function callbacks")
+
+		cc = self.calling_convention(host)
+		arg_vals = []
+		for i in range(len(proto_args)):
+			arg = proto_args[i]
+			arg_vals.append(arg(self.endian(), *cc.arg(arg, i+1)))
+
+		break_count = self.break_count(addr)
+		fn_ctx = FunctionContext()
+		fn(host, fn_ctx, break_count, *arg_vals)
 
 	def do_jmp(self, host, addr, **kwargs):
 		@host.with_inferior()
@@ -432,6 +505,9 @@ class Session(object):
 			yield addr.value(inferior)
 
 		for addr in self.mockups.keys():
+			yield addr.value(inferior)
+
+		for addr in self.function_cbs.keys():
 			yield addr.value(inferior)
 
 		for addr in self.skip_map.keys():
