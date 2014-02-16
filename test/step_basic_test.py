@@ -15,6 +15,7 @@ class Test(unittest.TestCase):
 			'got_step':        0,
 			'got_at_write':    0,
 			'got_after_write': 0,
+			'steps_after_write': 0,
 			'got_start':       0,
 			'got_sig':         0,
 			'got_on_exit':     0,
@@ -63,7 +64,8 @@ class Test(unittest.TestCase):
 		@s.at_addr(0x400627)
 		def after_write(host):
 			d['got_after_write'] += 1
-			self.assertEqual(d['got_step'], 702)						
+			self.assertGreater(d['got_step'], 22+1+1)
+			d['steps_after_write'] = d['got_step']
 			self.assertEqual(state[0], 2)
 			state[0] += 1
 			host.inferior().enter_step_over_mode()
@@ -74,7 +76,7 @@ class Test(unittest.TestCase):
 		def main_ret(host):
 			d['got_main_ret'] += 1
 			self.assertEqual(state[0], 3)
-			self.assertEqual(d['got_step'], 712)
+			self.assertEqual(d['got_step'], d['steps_after_write']+10)
 			state[0] += 1
 			host.inferior().exit_step_mode()
 			self.assertFalse(host.inferior().is_in_step_mode())
@@ -83,7 +85,7 @@ class Test(unittest.TestCase):
 		def on_exit(host):
 			host.log("inferior exited")
 			self.assertEqual(state[0], 4)
-			self.assertEqual(d['got_step'], 712)
+			self.assertEqual(d['got_step'], d['steps_after_write']+10)
 			d['got_on_exit'] += 1
 			state[0] += 1
 			host.log("asdfoaisjdfoij")
@@ -93,8 +95,8 @@ class Test(unittest.TestCase):
 		self.assertEqual(d['got_at_write'], 1)
 		self.assertEqual(d['got_after_write'], 1)
 		self.assertEqual(state[0], 5)
-		self.assertEqual(d['got_step'], 712)
-		self.assertEqual(d['got_start'], 712+3)
+		self.assertEqual(d['got_step'], d['steps_after_write']+10)
+		self.assertEqual(d['got_start'], d['steps_after_write']+10+3)
 		self.assertEqual(d['got_sig'], 0)
 		self.assertEqual(d['got_on_exit'], 1)
 		self.assertEqual(d['got_main_ret'], 1)

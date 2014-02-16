@@ -2,13 +2,13 @@
 mozz is a programmatic debugging/fuzzing library with 
 a CLI frontend for loading scripts and initializing the
 environment. It facilitates effective fuzzing by providing
-a simple API for hookingfunctions or instructions with
+a simple API for hooking functions or instructions with
 custom python code. In this way, users can easily provide
 mockup functions to simulated I/O instead of actually dealing
-with files and/sockets.
+with files and/or sockets.
 
 ## overview
-mozz provides a platform extremely readable and concise
+mozz provides a platform for readable and concise
 scripts for iteratively fuzzing and/or reverse engineering 
 a binary. The general idea is to start reversing a binary,
 write a bit of your mozz script to mockup any system calls
@@ -27,7 +27,7 @@ want to use mozz:
 ## an example
 The commented example below demonstrates the fundamental features
 of mozz.
-```
+```python
 #!/usr/bin/env python
 
 import mozz
@@ -53,7 +53,7 @@ def on_exit(host):
 #the host.set_drop_into_cli method sets a flag
 #that if the mozz backend has a CLI, it
 #should be provided at this point for manual
-#investigation. see the ## architecture
+#investigation. see the ## backends
 #section below for info on mozz backends
 @s.on_signal(mozz.sig.SIGSEGV)
 def on_seg(host):
@@ -70,8 +70,8 @@ def default_sig(host, sig):
 
 #break at 0x80489a8 and immediately
 #jump to 0x8048cd1. use skip to jump
-#over forks and other dumb stuff you want
-#to be executed
+#over forks and other dumb stuff you 
+#dont want to be executed
 s.skip(0x80489a8, 0x8048cd1)
 
 #a fake file handle number
@@ -173,20 +173,19 @@ s.skip(0x80490bc,0x80490c1,regstate={'eax': 0x0})
 def quit(host):
 	host.log("set stop flag")
 	#signals to mozz that it should abort the
-	#inferior and cleanup. this will not end
-	#the session.
+	#inferior and cleanup.
 	s.set_flag_stop()
 
 mozz.run_session(s)
 ```
 
-## architecture
+## backends
 mozz defers the task of managing and controlling an inferior
 process to a debugger adapter/backend. The adapter must provide
 implementations of the `mozz.host.Host` and the `mozz.host.Inf`
 classes (see `mozz/host.py`). Additionally, an adapter must
 provide an implementation based on the `mozz.adapter.Adapter`
-class in `mozz/adapter/Adapter`. Some backends may provide
+class in `mozz/adapter/__init__.py`. Some backends may provide
 a command line interface for use with the `host.set_drop_into_cli()`
 flag.
 
