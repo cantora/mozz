@@ -41,7 +41,7 @@ $(call test-template,$(1),./cli --exit -vvvv test/$(1).py,test/$(1).bin)
 endef
 
 define mod-test-template
-$(call test-template,$(1),PYTHONPATH='$(CURDIR):$$$$PYTHONPATH' python test/$(1).py)
+$(call test-template,$(1),PYTHONPATH='$(CURDIR):$$$$PYTHONPATH' python2 test/$(1).py)
 endef
 
 $(foreach test, $(SESSION_TESTS), $(eval $(call sess-test-template,$(test)) ) )
