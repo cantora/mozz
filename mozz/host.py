@@ -505,6 +505,10 @@ class Inf(object):
 			(data[2] << 16) + \
 			(data[3] << 24) 
 
+	def mem_read_uint8(self, addr):
+		data = self.mem_read(addr, 1)
+		return data[0]
+
 	def symbol_addr(self, name):
 		'''
 		returns the absolute address of symbol @name.

@@ -45,8 +45,22 @@ class Register(Location):
 			data[0:self._size]
 		)
 		host.inferior().reg_set(self._name, v)
+
+class MemoryLocation(Location):
+	def value(self, host):
+		addr = self.addr(host)
+		byte_size = self.size() >> 3
+		#returns data in native endian format
+		return host.inferior().mem_read_buf(addr, byte_size)
+
+	def set(self, host, data):
+		addr = self.addr(host)
+		byte_size = self.size() >> 3
+		#returns data in native endian format
+		return host.inferior().mem_write_buf(addr, data[0:byte_size])
+
 		
-class StackOffset(Location):
+class StackOffset(MemoryLocation):
 	def __init__(self, offset, size, stack_grows_down=True):
 		self._offset = offset
 		self._size = size
@@ -63,17 +77,16 @@ class StackOffset(Location):
 			addr = sp-self._offset
 		return addr
 
-	def value(self, host):
-		addr = self.addr(host)
-		byte_size = self._size >> 3
-		#returns data in native endian format
-		return host.inferior().mem_read_buf(addr, byte_size)
+class Absolute(MemoryLocation):
+	def __init__(self, addr, size):
+		self._addr = addr
+		self._size = size
 
-	def set(self, host, data):
-		addr = self.addr(host)
-		byte_size = self._size >> 3
-		#returns data in native endian format
-		return host.inferior().mem_write_buf(addr, data[0:byte_size])
+	def size(self):
+		return self._size
+
+	def addr(self, host):
+		return self._addr
 
 class Convention(object):
 	class UnknownArgument(mozz.err.Err):

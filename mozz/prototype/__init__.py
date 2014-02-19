@@ -6,6 +6,8 @@
 import mozz.err
 import mozz.prototype.int
 import mozz.abi.endian
+import mozz.abi.call
+import struct
 
 class ValueBase(object):
 
@@ -177,6 +179,36 @@ class Pointer(ValueBase):
 		return mozz.prototype.int.to_int(
 			self.data(), *args, **kwargs
 		)
+
+	def string(self, host):
+		'''
+		dereference pointer and return null terminated
+		string at the pointer value
+		'''
+		start = self.value()
+		offset = 0
+		bs = []
+		def current_byte():
+			return host.inferior().mem_read_uint8(start+offset)
+
+		b = current_byte()
+		while(b != 0):
+			bs.append(b)
+			offset += 1
+			b = current_byte()
+
+		if len(bs) < 1:
+			return ""
+
+		fmt = "%db" % len(bs)
+		return struct.pack(fmt, *bs)
+
+	def deref(self, host, typ):
+		ml = mozz.abi.call.Absolute(self.value(), typ.size())
+		v = ml.value()
+		getter = lambda: v
+		setter = lambda data: ml.set(host, data)
+		return typ(self.endian(), getter, setter)
 
 #[[[cog
 #	pointer_class_macro = '''
