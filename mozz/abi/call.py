@@ -139,3 +139,16 @@ class X8664SYSVConvention(Convention):
 
 	def type_to_category(self, t):
 		return 'INTEGER'
+
+class NativeConventionUnknown(mozz.err.Err):
+	pass
+
+def native_convention():
+	import mozz.system
+	mach = mozz.system.architecture()
+	if mach == mozz.system.ARCH_X86_64:
+		return X8664SYSVConvention
+
+	raise NativeConventionUnknown("no calling convention " + \
+									"known for machine type: " + \
+									repr(mach))

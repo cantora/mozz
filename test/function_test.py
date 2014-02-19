@@ -3,13 +3,18 @@ import unittest
 import mozz
 from mozz.test import run_test_module, abs_path
 from mozz.prototype import *
-from mozz.abi.call import X8664SYSVConvention
+from mozz.abi.call import native_convention
+import mozz.system
 
 class Test(unittest.TestCase):
 
 	def test_trace_function(self):
+		arch = mozz.system.architecture()
+		if arch != mozz.system.ARCH_X86_64:
+			return #this test not yet supported on non x86_64 systems
+
 		s = mozz.Session(abs_path(__file__, "function_test.bin"))
-		s.set_calling_convention(X8664SYSVConvention)
+		s.set_calling_convention(native_convention())
 
 		def test_params(n,a,b,c,d,e):
 			expected_params = [
@@ -49,7 +54,7 @@ class Test(unittest.TestCase):
 		}
 
 		@s.at_function(
-			0x4005b4,
+			"test_function",
 			TCInt32, TCInt8, TCInt16, TCUInt32, TCInt32,
 			Pointer64, Pointer64, Pointer64
 		)
