@@ -110,6 +110,7 @@ class Session(object):
 		self.addr_cbs = {}
 		self.mockups = {}
 		self.function_cbs = {}
+		self.function_mockups = {}
 		self.skip_map = {}
 		self.break_counts = {}
 		self.n = 0
@@ -266,6 +267,14 @@ class Session(object):
 
 		return tmp
 
+	def mockup_function(self, addr, *args, **kwargs):
+		(addr,) = convert_values_to_addrs(addr)
+		def tmp(fn):
+			self.function_mockups[addr] = (fn, args, kwargs)
+			return fn
+
+		return tmp
+
 	def at_addr(self, addr, *args, **kwargs):
 		(addr,) = convert_values_to_addrs(addr)
 
@@ -399,6 +408,7 @@ class Session(object):
 			if not callable(fn):
 				continue
 
+			handled = True
 			self.do_function_callback(host, addr, fn, proto_args, options, *args, **kwargs)
 
 		for (_, (fn, jmp, options)) in self.find_addrs(self.mockups, addr, host.inferior()):
@@ -407,12 +417,23 @@ class Session(object):
 	
 			mockup_handled = True
 			self.do_mockup_callback(host, fn, jmp, options, *args, **kwargs)
+			break # we can only do one mockup per address
 
-		#skips have lower precedence than mockups
+		#skips and function mockups have lower precedence than mockups
 		if not mockup_handled: 
+			for (_, (fn, proto_args, options)) in self.find_addrs(self.function_mockups, addr, host.inferior()):
+				if not callable(fn):
+					continue
+
+				mockup_handled = True
+				self.do_function_mockup(host, addr, fn, proto_args, options, *args, **kwargs)
+				break # only one mockup per address
+
+		if not mockup_handled:
 			for (_, (jmp, _, options)) in self.find_addrs(self.skip_map, addr, host.inferior()):
 				skip_handled = True 
 				self.do_jmp(host, jmp, **options)
+				break # one skip per address
 
 		self.inc_break_count(addr)
 		
@@ -433,20 +454,41 @@ class Session(object):
 		fn(host, *args, **kwargs)
 		self.do_jmp(host, jmp, **options)
 
-	def do_function_callback(self, host, addr, fn, proto_args, options, *args, **kwargs):
-		if not self.calling_convention:
-			raise Exception("a calling convention must " + \
-							"be set to use function callbacks")
-
+	def get_function_arg_vals(self, host, proto_args):
 		cc = self.calling_convention(host)
 		arg_vals = []
 		for i in range(len(proto_args)):
 			arg = proto_args[i]
 			arg_vals.append(arg(self.endian(), *cc.arg(arg, i+1)))
 
+		return arg_vals
+
+	def do_function_callback(self, host, addr, fn, proto_args, options, *args, **kwargs):
+		if not self.calling_convention:
+			raise Exception("a calling convention must " + \
+							"be set to use function callbacks")
+
+		arg_vals = self.get_function_arg_vals(host, proto_args)
 		break_count = self.break_count(addr)
 		fn_ctx = FunctionContext()
 		fn(host, fn_ctx, break_count, *arg_vals)
+
+	def do_function_mockup(self, host, addr, fn, proto_args, options, *args, **kwargs):
+		if not self.calling_convention:
+			raise Exception("a calling convention must " + \
+							"be set to use function mockups")
+
+		arg_vals = self.get_function_arg_vals(host, proto_args)
+		break_count = self.break_count(addr)
+		fn_ctx = FunctionContext()
+		ret_val = fn(host, fn_ctx, break_count, *arg_vals)
+
+		cc = self.calling_convention(host)
+		@host.with_inferior()
+		def tmp():
+			if ret_val is not None:
+				cc.set_return_value(ret_val)
+			cc.do_return()
 
 	def do_jmp(self, host, addr, **kwargs):
 		@host.with_inferior()
@@ -508,6 +550,9 @@ class Session(object):
 			yield addr.value(inferior)
 
 		for addr in self.function_cbs.keys():
+			yield addr.value(inferior)
+
+		for addr in self.function_mockups.keys():
 			yield addr.value(inferior)
 
 		for addr in self.skip_map.keys():

@@ -126,6 +126,26 @@ class Convention(object):
 
 		return (getter, setter)
 
+	def return_value_size(self):
+		'''
+		return the number of bits the function
+		return value can hold.
+		'''
+		raise Exception("not implemented")
+
+	def set_return_value(self, val):
+		'''
+		set function call return value to val
+		'''
+		raise Exception("not implemented")
+
+	def do_return(self):
+		'''
+		execute the return procedure for this
+		architecture
+		'''
+		raise Exception("not implemented")
+
 class X8664SYSVConvention(Convention):
 	'''
 	this isnt complete, it just handles the
@@ -151,7 +171,26 @@ class X8664SYSVConvention(Convention):
 			self.add_loc_entry('INTEGER', i, StackOffset(offset, 64, sgd))
 
 	def type_to_category(self, t):
+		#TODO: implement other types
 		return 'INTEGER'
+
+	def return_value_size(self):
+		return (8 << 3)
+
+	def set_return_value(self, val):
+		self.host.inferior().reg_set("rax", val)
+
+	def do_return(self):
+		sp = self.host.inferior().reg_sp()
+		en = self.host.session.endian()
+		saved_pc = self.host.inferior().mem_read_uint64(sp, endian=en)
+		self.host.inferior().reg_set_pc(saved_pc)
+
+		if self.host.session.stack_grows_down():
+			new_sp = sp + 8
+		else:
+			new_sp = sp - 8
+		self.host.inferior().set_reg_sp(new_sp)
 
 class NativeConventionUnknown(mozz.err.Err):
 	pass

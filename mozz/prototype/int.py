@@ -1,13 +1,8 @@
-#[[[cog
-#	import cog
-#]]]
-#[[[end]]]
-
 from collections import namedtuple
 import struct
 
 import mozz.err
-import mozz.prototype.endian
+import mozz.abi.endian
 import mozz.util
 
 class SizeError(mozz.err.Err):
@@ -28,8 +23,8 @@ class TwosComplementUnsigned(object):
 
 def to_int(data, *args, **kwargs):
 	sz = 32
-	endian = mozz.prototype.endian.Little
-	fmt = mozz.prototype.int.TwosComplementSigned
+	endian = mozz.abi.endian.Little
+	fmt = TwosComplementSigned
 
 	if 'size' in kwargs:
 		sz = kwargs['size']
@@ -45,3 +40,6 @@ def to_int(data, *args, **kwargs):
 
 	return struct.unpack(fmt_str, data)[0]
 
+def to_uint(data, *args, **kwargs):
+	kwargs['fmt'] = TwosComplementUnsigned
+	return to_int(data, *args, **kwargs)

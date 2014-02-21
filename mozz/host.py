@@ -18,6 +18,7 @@ from collections import namedtuple
 import mozz.err
 from mozz.ioconfig import *
 import mozz.sig
+import mozz.prototype.int
 	
 class HostErr(mozz.err.Err):
 	pass
@@ -496,14 +497,20 @@ class Inf(object):
 		'''
 		raise NotImplementedError("not implemented")
 
-	def mem_read_uint32(self, addr):
-		#TODO: dont assume LE
-		data = self.mem_read(addr, 4)
-		return \
-			data[0] + \
-			(data[1] << 8) + \
-			(data[2] << 16) + \
-			(data[3] << 24) 
+	def mem_read_uint64(self, addr, *args, **kwargs):
+		data = self.mem_read_buf(addr, 8)
+		kwargs['size'] = 64
+		return mozz.prototype.int.to_uint(data, *args, **kwargs)
+
+	def mem_read_uint32(self, addr, *args, **kwargs):
+		data = self.mem_read_buf(addr, 4)
+		kwargs['size'] = 32
+		return mozz.prototype.int.to_uint(data, *args, **kwargs)
+
+	def mem_read_uint16(self, addr, *args, **kwargs):
+		data = self.mem_read_buf(addr, 2)
+		kwargs['size'] = 16
+		return mozz.prototype.int.to_uint(data, *args, **kwargs)
 
 	def mem_read_uint8(self, addr):
 		data = self.mem_read(addr, 1)
