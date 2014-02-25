@@ -12,7 +12,7 @@ example-bin: example-bin.c
 	gcc -fno-stack-protector -o $@ $< 
 
 test/%_test.bin: test/%_test.c
-	gcc -o $@ $<
+	gcc -g -o $@ $<
 
 test/mockup_fakefile_test.bin: test/mockup_basic_test.bin
 	cd test && ln -s $(notdir $<) $(notdir $@)
