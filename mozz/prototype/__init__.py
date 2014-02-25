@@ -72,6 +72,19 @@ class Int(ValueBase):
 		return mozz.prototype.int.to_int(
 			real_data, *args, **kwargs
 		)
+
+	def set(self, val, *args, **kwargs):
+		size = self.__class__.size()
+		kwargs['endian'] = self.endian()
+
+		if self.signed():
+			kwargs['fmt'] = mozz.prototype.int.TwosComplementSigned
+		else:
+			kwargs['fmt'] = mozz.prototype.int.TwosComplementUnsigned
+
+		kwargs['size'] = size
+		data = mozz.prototype.int.to_data(val, *args, **kwargs)
+		return self.set_data(data)
 		
 #[[[cog
 #	tc_int_class_macro = '''
@@ -205,7 +218,7 @@ class Pointer(ValueBase):
 
 	def deref(self, host, typ):
 		ml = mozz.location.Absolute(self.value(), typ.size())
-		v = ml.value()
+		v = ml.value(host)
 		getter = lambda: v
 		setter = lambda data: ml.set(host, data)
 		return typ(self.endian(), getter, setter)
