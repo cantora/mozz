@@ -28,6 +28,10 @@ int test_function(int a, char b, short c, unsigned int d, int e,
 	return 0;
 }
 
+void default_case() {
+	printf("default case\n");
+}
+
 int main(int argc, char *argv[]) {
 	char buf[25] = 
 		"8*3+1 ch"
@@ -61,7 +65,7 @@ int main(int argc, char *argv[]) {
 		goto done;
 	}
 
-	printf("default case\n");
+	default_case();
 done:
 	printf("%s: exit\n", __FILE__);
 	return 0;
