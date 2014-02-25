@@ -104,7 +104,7 @@ class Test(unittest.TestCase):
 			'params_correct': [0,0,0]
 		}
 
-		@s.at_function(
+		@s.mockup_function(
 			"test_function",
 			TCInt32, TCInt8, TCInt16, TCUInt32, TCInt32,
 			Pointer64, Pointer64, Pointer64
@@ -132,5 +132,47 @@ class Test(unittest.TestCase):
 		for i in range(3):
 			print("check params #%d" % i)
 			self.assertEqual(result['params_correct'][i], 1)
+
+	def test_mockup_function2(self):
+		arch = mozz.system.architecture()
+		if arch != mozz.system.ARCH_X86_64:
+			return #this test not yet supported on non x86_64 systems
+
+		s = mozz.Session(abs_path(__file__, "function_test.bin"))
+		s.set_calling_convention(native_convention())
+
+		result = {
+			'count': 0,
+			'params_correct': [0,0,0]
+		}
+
+		@s.mockup_function(
+			"test_function",
+			TCInt32, TCInt8, TCInt16, TCUInt32, TCInt32,
+			Pointer64, Pointer64, Pointer64
+		)
+		def test_function(host, fn_ctx, n, a, b, c, d, e, \
+							buf1, buf2, output_var):
+			host.log("test_function(%d):" % n)
+			host.log("  a=%d" % a.value())
+			host.log("  b=%d" % b.value())
+			host.log("  c=%d" % c.value())
+			host.log("  d=%d" % d.value())
+			host.log("  e=%d" % e.value())
+			host.log("  buf1=%x:%r" % (buf1.value(), buf1.string(host)))
+			host.log("  buf2=%x:%r" % (buf2.value(), buf2.string(host)))
+			host.log("  output_var=%x" % output_var.value())
+
+			result['count'] += 1
+			if n < 3 and self.check_params(n,host,a,b,c,d,e,buf1,buf2):
+				result['params_correct'][n] = 1
+
+			output_var.deref(host, TCInt32).set(0xa1f)
+			host.log("*output_var = %x" % output_var.deref(host, TCInt32).value())
+			return 3456
+
+		mozz.run_session(s)
+		self.assertEqual(result['count'], 1)
+		self.assertEqual(result['params_correct'][0], 1)
 
 run_test_module(__name__, __file__)

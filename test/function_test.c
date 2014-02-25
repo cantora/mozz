@@ -39,6 +39,7 @@ int main(int argc, char *argv[]) {
 	
 	status = test_function(2345, 'x', 98, 789, 2346,
 				buf, "secretadminpass", &status2);
+	printf("status = %d, status2 = %x\n", status, status2);
 	if(status == 3456 && status2 == 0xa1f) {
 		printf("admin pass accepted\n");
 		goto done;
@@ -46,6 +47,7 @@ int main(int argc, char *argv[]) {
 
 	status = test_function(84739, 'z', 2847, 9308, 12345,
 				"c00lpass1337", buf, &status2);
+	printf("status = %d, status2 = %x\n", status, status2);
 	if(status == 84739 && status2 == 0xc001f00d) {
 		printf("normal pass accepted\n");
 		goto done;
@@ -53,6 +55,7 @@ int main(int argc, char *argv[]) {
 
 	status = test_function(72, 72, 9374, 1038, 43879,
 				"asdf", "qwer", &status2);
+	printf("status = %d, status2 = %x\n", status, status2);
 	if(status == 4567 && status2 == 0xc0bb13) {
 		printf("asdfqwer\n");
 		goto done;
