@@ -103,7 +103,7 @@ class X8664SYSVConvention(Convention):
 			new_sp = sp + 8
 		else:
 			new_sp = sp - 8
-		self.host.inferior().set_reg_sp(new_sp)
+		self.host.inferior().reg_set_sp(new_sp)
 
 class NativeConventionUnknown(mozz.err.Err):
 	pass
