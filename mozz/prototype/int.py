@@ -43,3 +43,19 @@ def to_int(data, *args, **kwargs):
 def to_uint(data, *args, **kwargs):
 	kwargs['fmt'] = TwosComplementUnsigned
 	return to_int(data, *args, **kwargs)
+
+def to_data(val, *args, **kwargs):
+	sz = 32
+	endian = mozz.abi.endian.Little
+	fmt = TwosComplementSigned
+
+	if 'size' in kwargs:
+		sz = kwargs['size']
+	if 'endian' in kwargs:
+		endian = kwargs['endian']
+	if 'fmt' in kwargs:
+		fmt = kwargs['fmt']
+
+	fmt_str = "%s%s" % (endian.format(), fmt.format(sz))
+
+	return struct.pack(fmt_str, val)
