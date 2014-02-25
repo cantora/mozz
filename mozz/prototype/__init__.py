@@ -6,7 +6,7 @@
 import mozz.err
 import mozz.prototype.int
 import mozz.abi.endian
-import mozz.abi.call
+import mozz.location
 import struct
 
 class ValueBase(object):
@@ -204,7 +204,7 @@ class Pointer(ValueBase):
 		return struct.pack(fmt, *bs)
 
 	def deref(self, host, typ):
-		ml = mozz.abi.call.Absolute(self.value(), typ.size())
+		ml = mozz.location.Absolute(self.value(), typ.size())
 		v = ml.value()
 		getter = lambda: v
 		setter = lambda data: ml.set(host, data)
