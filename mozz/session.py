@@ -485,7 +485,7 @@ class Session(object):
 
 		cc = self.calling_convention(host)
 		@host.with_inferior()
-		def tmp():
+		def tmp(host):
 			if ret_val is not None:
 				cc.set_return_value(ret_val)
 			cc.do_return()
