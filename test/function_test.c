@@ -19,6 +19,9 @@ int test_function(int a, char b, short c, unsigned int d, int e,
 		return 0xc0bb13;
 	}
 
+	printf("c=%x\n", c);
+	printf("d=%x\n", d);
+	printf("e=%x\n", e);
 	if(c+d+e == 0x98989898) {
 		*output_var = 345987;
 		return 0x8000;
@@ -30,6 +33,10 @@ int test_function(int a, char b, short c, unsigned int d, int e,
 
 void default_case() {
 	printf("default case\n");
+}
+
+void checkpoint3(int status, int status2) {
+	printf("checkpoint3\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -60,6 +67,7 @@ int main(int argc, char *argv[]) {
 	status = test_function(72, 72, 9374, 1038, 43879,
 				"asdf", "qwer", &status2);
 	printf("status = %d, status2 = %x\n", status, status2);
+	checkpoint3(status, status2);
 	if(status == 4567 && status2 == 0xc0bb13) {
 		printf("asdfqwer\n");
 		goto done;

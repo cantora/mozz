@@ -483,11 +483,13 @@ class Session(object):
 		fn_ctx = FunctionContext()
 		ret_val = fn(host, fn_ctx, break_count, *arg_vals)
 
+		if ret_val is None:
+			return #cancel mockup fn returned None
+
 		cc = self.calling_convention(host)
 		@host.with_inferior()
 		def tmp(host):
-			if ret_val is not None:
-				cc.set_return_value(ret_val)
+			cc.set_return_value(ret_val)
 			cc.do_return()
 
 	def do_jmp(self, host, addr, **kwargs):

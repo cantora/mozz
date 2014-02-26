@@ -28,7 +28,7 @@ class Register(Base):
 	def value(self, host):
 		v = host.inferior().reg(self._name)
 		endian = host.session.endian()
-		fmt = mozz.util.size_to_struct_fmt(self._size)
+		fmt = mozz.util.size_to_struct_fmt(self.size())
 		if not fmt:
 			raise Exception("invalid register size %d" % self._size)
 		data = struct.pack("%s%s" % (endian.format(), fmt), v)
@@ -36,13 +36,12 @@ class Register(Base):
 
 	def set(self, host, data):
 		endian = host.session.endian()
-		fmt = mozz.util.size_to_struct_fmt(self._size)
+		sz = len(data) << 3
+		fmt = mozz.util.size_to_struct_fmt(sz).upper()
 		if not fmt:
-			raise Exception("invalid register size %d" % self._size)
-		v = struct.unpack(
-			"%s%s" % (fmt, endian.format()),
-			data[0:self._size]
-		)
+			raise Exception("invalid register size %d" % sz)
+		unpack_fmt = "%s%s" % (endian.format(), fmt)
+		v = struct.unpack(unpack_fmt, data[0:self._size])[0]
 		host.inferior().reg_set(self._name, v)
 
 class Memory(Base):
