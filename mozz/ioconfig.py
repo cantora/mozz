@@ -42,6 +42,16 @@ class IOConfig(object):
 	def cleanup(self):
 		pass
 
+class FileConfig(IOConfig):
+	def __init__(self, filepath):
+		self._filepath = filepath
+
+	def filename(self):
+		return self._filepath
+
+	def io_object(self):
+		return None
+
 class DefaultIOConfig(IOConfig):
 	'''
 	non-specified configuration. basically defers
