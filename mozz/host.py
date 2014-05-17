@@ -330,7 +330,7 @@ class Inf(object):
 
 	def pid(self):
 		if not self.is_alive():
-			return nil
+			return None
 
 		return self._pid()
 
