@@ -18,14 +18,27 @@
 SIGNAL_DEFAULT = "signal_default"
 SIGNAL_UNKNOWN = "signal_unknown"
 
+#when the inferior is started (after being stopped)
 START = "start"
+
+#just before the inferior runs (the inferior doesnt exist yet)
 RUN = "run"
+
+# at the inferior entry point (some backends may not fully
+# support this)
 ENTRY = "entry"
+
+# when the inferior is stepped
 STEP = "step"
+
+# when the inferior exits
 EXIT = "exit"
+
+# when the session finishes
 FINISH = "finish"
 
 #just after the inferior object is created
 INFERIOR_PRE = "inferior_pre" 
+
 #just before the inferior object is destroyed (after cleanup)
 INFERIOR_POST = "inferior_post"
