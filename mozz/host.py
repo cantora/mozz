@@ -251,6 +251,13 @@ class Host(object):
 
 		return self.invoke_callback(mozz.cb.START)
 
+	def on_obj_load(self, objfile):
+		if self.ignore_callback():
+			return False
+
+		#mozz.debug("host: on_objfile")
+		return self.invoke_callback(mozz.cb.OBJ_LOAD, objfile)
+
 	def on_exit(self):
 		if self.ignore_callback():
 			return False

@@ -25,6 +25,7 @@ import sys
 import mozz.host
 import mozz.adapter
 import mozz.log
+import mozz.obj
 
 #this is pretty hacky, but its the only solution ive found
 #for the following problem: sometimes we want to silence
@@ -253,6 +254,11 @@ class GDBHost(mozz.host.Host):
 
 		self.on_start()
 
+	def gdb_objfile(self, event):
+		#mozz.debug("objfile event: %r" % event)
+		#mozz.debug("objfile: %r" % event.new_objfile.filename)
+		self.on_obj_load(mozz.obj.File(event.new_objfile.filename))
+
 	def gdb_exit(self, event):
 		#mozz.debug("exit event: %r" % event)
 
@@ -315,7 +321,7 @@ class GDBAdapter(mozz.adapter.CLIAdapter):
 		
 		gdb.events.stop.connect(self.on_stop)
 		gdb.events.cont.connect(self.on_cont)
-		#gdb.events.new_objfile.connect(self.on_objfile)
+		gdb.events.new_objfile.connect(self.on_objfile)
 		gdb.events.exited.connect(self.on_exit)
 
 	def exit(self):
@@ -334,7 +340,11 @@ class GDBAdapter(mozz.adapter.CLIAdapter):
 	def on_cont(self, event):
 		if self.running_or_stopped() and not self.exiting:
 			self.exit_if_exception(lambda: self.state.host.gdb_cont(event))
-	
+
+	def on_objfile(self, event):
+		if self.running_or_stopped() and not self.exiting:
+			self.exit_if_exception(lambda: self.state.host.gdb_objfile(event))
+
 	def on_exit(self, event):
 		if self.running_or_stopped() and not self.exiting:
 			self.exit_if_exception(lambda: self.state.host.gdb_exit(event))

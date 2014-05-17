@@ -24,6 +24,9 @@ START = "start"
 #just before the inferior runs (the inferior doesnt exist yet)
 RUN = "run"
 
+#after a new object has been loaded
+OBJ_LOAD = "obj_load"
+
 # at the inferior entry point (some backends may not fully
 # support this)
 ENTRY = "entry"

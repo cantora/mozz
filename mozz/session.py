@@ -343,7 +343,16 @@ class Session(object):
 
 	def del_cb_start(self, fn):
 		return self.remove_event_cb_fn(START, fn)
-	
+
+	def on_obj_load(self):
+		'''
+		just after an object is loaded
+		'''
+		return self.add_event_cb_fn(OBJ_LOAD)
+
+	def del_cb_obj_load(self, fn):
+		return self.remove_event_cb_fn(OBJ_LOAD, fn)
+
 	def on_exit(self):
 		return self.add_event_cb_fn(EXIT)
 
