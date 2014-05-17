@@ -571,3 +571,21 @@ class Session(object):
 
 		for addr in self.skip_map.keys():
 			yield addr.value(inferior)
+
+	#-------- helpers -------------
+
+	def print_at(self, addr, *args, **kwargs):
+		if 'regset' in kwargs:
+			rs = kwargs['regset']
+			@self.at_addr(addr, regset=rs)
+			def tmp(host, *regs):
+				if 'msg' not in kwargs:
+					kwargs['msg'] = "at %x" % host.inferior().reg_pc()
+				host.log("%s:" % kwargs['msg'])
+				for i in range(len(regs)):
+					host.log("  %s = %x" % (rs[i], regs[i]))
+
+	def quit_at(self, addr):
+		@self.at_addr(addr)
+		def tmp(host):
+			self.set_flag_stop()
