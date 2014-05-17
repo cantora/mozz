@@ -105,6 +105,45 @@ class X8664SYSVConvention(Convention):
 			new_sp = sp - 8
 		self.host.inferior().reg_set_sp(new_sp)
 
+class X86SYSVConvention(Convention):
+
+	def __init__(self, host):
+		super(X86SYSVConvention, self).__init__(host)
+
+		sgd = host.session.stack_grows_down()
+
+		self.add_loc_entry('INTEGER', 0, Register("eax", 32))
+
+		#ebp -> saved ebp
+		#ebp + 4 -> ret
+		#ebp + 8 -> arg0
+		#...etc
+		for i in range(1, 32):
+			offset = i*4 + 4 
+			self.add_loc_entry('INTEGER', i, StackOffset(offset, 32, sgd))
+
+	def type_to_category(self, t):
+		#TODO: implement other types
+		return 'INTEGER'
+
+	def return_value_size(self):
+		return (4 << 3)
+
+	def set_return_value(self, val):
+		self.host.inferior().reg_set("rax", val)
+
+	def do_return(self):
+		sp = self.host.inferior().reg_sp()
+		en = self.host.session.endian()
+		saved_pc = self.host.inferior().mem_read_uint32(sp, endian=en)
+		self.host.inferior().reg_set_pc(saved_pc)
+
+		if self.host.session.stack_grows_down():
+			new_sp = sp + 4
+		else:
+			new_sp = sp - 4
+		self.host.inferior().reg_set_sp(new_sp)
+
 class NativeConventionUnknown(mozz.err.Err):
 	pass
 
@@ -112,6 +151,8 @@ def native_convention():
 	import mozz.system
 	mach = mozz.system.architecture()
 	if mach == mozz.system.ARCH_X86_64:
+		return X8664SYSVConvention
+	elif mach == mozz.system.ARCH_X86:
 		return X8664SYSVConvention
 
 	raise NativeConventionUnknown("no calling convention " + \
