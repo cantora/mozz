@@ -321,6 +321,18 @@ class Inf(object):
 		'''
 		raise NotImplementedError("not implemented")
 
+	def pid(self):
+		if not self.is_alive():
+			return nil
+
+		return self._pid()
+
+	def _pid(self):
+		'''
+		return process id (as integer) of the inferior
+		'''
+		raise NotImplementedError("not implemented")
+
 	def is_in_step_mode(self):
 		return self.step_mode != False
 

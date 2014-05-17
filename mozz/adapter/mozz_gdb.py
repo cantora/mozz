@@ -100,6 +100,9 @@ class GDBInf(mozz.host.Inf):
 			return True
 		return False
 
+	def _pid(self):
+		return self.gdb_inf().pid
+
 	def gdb_inf(self):
 		for inf in gdb.inferiors():
 			if self.inf_id == inf.num:
