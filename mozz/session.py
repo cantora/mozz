@@ -336,6 +336,9 @@ class Session(object):
 		return self.remove_event_cb_fn(SIGNAL_UNKNOWN, fn)
 
 	def on_start(self):
+		'''
+		just before an inferior starts (after being stopped)
+		'''
 		return self.add_event_cb_fn(START)
 
 	def del_cb_start(self, fn):
