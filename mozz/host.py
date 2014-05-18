@@ -458,7 +458,7 @@ class Inf(object):
 		returns value of @name register
 		'''
 		raise NotImplementedError("not implemented")
-	
+
 	def reg_sp(self):
 		raise NotImplementedError("not implemented")
 

@@ -16,14 +16,20 @@ class Base(object):
 
 class Register(Base):
 	def __init__(self, name, size):
+		'''
+		specify size in bits
+		'''
 		self._name = name
-		self._size = size
+		self._size = size # in bits
 
 	def name(self):
 		return self._name
 
 	def size(self):
 		return self._size
+
+	def __str__(self):
+		return self._name
 
 	def value(self, host):
 		v = host.inferior().reg(self._name)
@@ -57,14 +63,41 @@ class Memory(Base):
 		#returns data in native endian format
 		return host.inferior().mem_write_buf(addr, data[0:byte_size])
 
-class StackOffset(Memory):
+class RegOffset(Memory):
+	def __init__(self, name, offset, size):
+		self._name = name
+		self._offset = offset
+		self._size = size
+
+	def size(self):
+		return self._size
+
+	def addr(self, host):
+		base = host.inferior().reg(self._name)
+		addr = base+self._offset
+		return addr
+
+	def __str__(self):
+		s = ""
+		deref = "(%%%s)" % self._name
+		if self._offset == 0:
+			return deref
+		elif self._offset < 0:
+			s += "-"
+
+		off = self._offset
+		if off < 0:
+			off = -off
+
+		s += "0x%x" % off
+		s += deref
+		return s
+
+class StackOffset(RegOffset):
 	def __init__(self, offset, size, stack_grows_down=True):
 		self._offset = offset
 		self._size = size
 		self._stack_grows_down = stack_grows_down
-
-	def size(self):
-		return self._size
 
 	def addr(self, host):
 		sp = host.inferior().reg_sp()
@@ -73,6 +106,17 @@ class StackOffset(Memory):
 		else:
 			addr = sp-self._offset
 		return addr
+
+	def __str__(self):
+		deref = "(%%sp)"
+		if offset < 1:
+			return deref
+
+		s = "0x%x" % self._offset
+		if not self._stack_grows_down:
+			s = "-" + s
+
+		return s + deref
 
 class Absolute(Memory):
 	def __init__(self, addr, size):
@@ -84,3 +128,12 @@ class Absolute(Memory):
 
 	def addr(self, host):
 		return self._addr
+
+	def __str__(self):
+		return "*0x%x" % self._addr
+
+def offset(name, offset, n):
+	return RegOffset(name, offset, n << 3)
+
+def abs(addr, n):
+	return Absolute(addr, n << 3)

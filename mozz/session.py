@@ -15,11 +15,13 @@
 # along with mozz.  If not, see <http://www.gnu.org/licenses/>.
 import os
 from collections import namedtuple
+import struct
 
 import mozz.err
 from mozz.cb import *
 import mozz.log
 import mozz.abi.endian
+from mozz import location
 
 class SessionErr(mozz.err.Err):
 	pass
@@ -412,9 +414,9 @@ class Session(object):
 				if not callable(fn):
 					continue
 		
-				regargs = self.make_regset_args(host, **options)
+				extargs = self.make_addr_ext_args(host, **options)
 				handled = True
-				fn(host, *(regargs + args), **kwargs)
+				fn(host, *(extargs + args), **kwargs)
 
 		for (_, (fn, proto_args, options)) in self.find_addrs(self.function_cbs, addr, host.inferior()):
 			if not callable(fn):
@@ -451,18 +453,24 @@ class Session(object):
 		
 		return handled or mockup_handled or skip_handled
 
-	def make_regset_args(self, host, **kwargs):
-		regargs = []
-		if 'regset' in kwargs:
-			for reg in kwargs['regset']:
-				regargs.append(host.inferior().reg(reg))
+	def make_addr_ext_args(self, host, **kwargs):
+		locargs = []
+		if 'locs' in kwargs:
+			for loc in kwargs['locs']:
+				if isinstance(loc, str):
+					locargs.append(host.inferior().reg(loc))
+				elif isinstance(loc, location.Register):
+					locargs.append(host.inferior().reg(loc.name()))
+				elif isinstance(loc, location.RegOffset):
+					val = loc.value(host)
+					locargs.append(val)
 
-		return tuple(regargs)
+		return tuple(locargs)
 
 	def do_mockup_callback(self, host, fn, jmp, options, *args, **kwargs):
-		regargs = self.make_regset_args(host, **options)
+		extargs = self.make_addr_ext_args(host, **options)
 		
-		args = regargs + args
+		args = extargs + args
 		fn(host, *args, **kwargs)
 		self.do_jmp(host, jmp, **options)
 
@@ -574,16 +582,33 @@ class Session(object):
 
 	#-------- helpers -------------
 
-	def print_at(self, addr, *args, **kwargs):
-		if 'regset' in kwargs:
-			rs = kwargs['regset']
-			@self.at_addr(addr, regset=rs)
-			def tmp(host, *regs):
+	def log_at(self, addr, *args, **kwargs):
+		if 'locs' in kwargs:
+			locs_tpl = kwargs['locs']
+			if 'memfmt' in kwargs:
+				memfmt = kwargs['memfmt']
+			else:
+				memfmt = None
+
+			@self.at_addr(addr, locs=locs_tpl)
+			def tmp(host, *loc_vals):
 				if 'msg' not in kwargs:
 					kwargs['msg'] = "at %x" % host.inferior().reg_pc()
 				host.log("%s:" % kwargs['msg'])
-				for i in range(len(regs)):
-					host.log("  %s = %x" % (rs[i], regs[i]))
+				for i in range(len(locs_tpl)):
+					v = loc_vals[i]
+					if isinstance(v, str):
+						if memfmt:
+							tpl = struct.unpack(memfmt, v)
+							str_val = " ".join(map(lambda x: "0x%x" % x, tpl))
+						else:
+							str_val = mozz.util.bin_to_hex(v)
+
+					else:
+						host.log(str(type(v)))
+						str_val = "%x" % v
+					loc_name = str(locs_tpl[i])
+					host.log("  %s = %s" % (loc_name, str_val))
 
 	def quit_at(self, addr):
 		@self.at_addr(addr)

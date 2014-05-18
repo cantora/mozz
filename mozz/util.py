@@ -18,6 +18,10 @@ import re
 import threading
 
 import mozz.log
+import binascii
+
+def bin_to_hex(buf):
+	return binascii.hexlify(buf)
 
 def size_to_struct_fmt(sz):
 	if sz == 8:
