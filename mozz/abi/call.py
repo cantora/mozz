@@ -153,7 +153,7 @@ def native_convention():
 	if mach == mozz.system.ARCH_X86_64:
 		return X8664SYSVConvention
 	elif mach == mozz.system.ARCH_X86:
-		return X8664SYSVConvention
+		return X86SYSVConvention
 
 	raise NativeConventionUnknown("no calling convention " + \
 									"known for machine type: " + \
