@@ -131,7 +131,7 @@ class GDBInf(mozz.host.Inf):
 		return self.reg_set("sp", value)
 
 	def reg(self, name):
-		v = gdb.parse_and_eval("$%s" % name)
+		v = gdb.parse_and_eval("(void *) $%s" % name)
 		return long(v)
 
 	'''
