@@ -605,8 +605,7 @@ class Session(object):
 							str_val = mozz.util.bin_to_hex(v)
 
 					else:
-						host.log(str(type(v)))
-						str_val = "%x" % v
+						str_val = "0x%x" % v
 					loc_name = str(locs_tpl[i])
 					host.log("  %s = %s" % (loc_name, str_val))
 
@@ -614,3 +613,23 @@ class Session(object):
 		@self.at_addr(addr)
 		def tmp(host):
 			self.set_flag_stop()
+
+	def trace_function(self, addr, *args, **kwargs):
+		@self.at_function(addr, *args, **kwargs)
+		def trace(host, ctx, brks, *arg_vals):
+			host.log("at function %s:" % addr)
+			for i in range(len(arg_vals)):
+				val = arg_vals[i].value()
+				if isinstance(val, str):
+					if 'memfmt' in kwargs:
+						tpl = struct.unpack(kwargs['memfmt'], val)
+						str_val = " ".join(map(lambda x: "0x%x" % x, tpl))
+					else:
+						str_val = mozz.util.bin_to_hex(val)
+
+				elif isinstance(val, int) or isinstance(val, long):
+					strval = "0x%x" % val
+				else:
+					strval = repr(val)
+
+				host.log("  arg%d: %s" % (i, strval))
