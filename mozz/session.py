@@ -617,7 +617,11 @@ class Session(object):
 	def trace_function(self, addr, *args, **kwargs):
 		@self.at_function(addr, *args, **kwargs)
 		def trace(host, ctx, brks, *arg_vals):
-			host.log("at function %s:" % addr)
+			if isinstance(addr, int) or isinstance(addr, long):
+				fn_name = "0x%x" % addr
+			else:
+				fn_name = str(addr)
+			host.log("at function %s:" % fn_name)
 			for i in range(len(arg_vals)):
 				val = arg_vals[i].value()
 				if isinstance(val, str):
