@@ -36,7 +36,7 @@ class Test(unittest.TestCase):
 			def seteax(host):
 				host.inferior().reg_set("rax", fp)
 
-		@s.mockup(0x400730, 0x400735, regset=('rdi',) )
+		@s.mockup(0x400730, 0x400735, locs=('rdi',) )
 		def fake_read(host, rdi):
 			host.log("rdi=0x%x" % rdi)
 			d['got_fake_read'] += 1
